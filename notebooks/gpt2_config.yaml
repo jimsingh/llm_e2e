@@ -1,0 +1,6 @@
+data:
+    dataset_name: 'karpathy/tiny_shakespeare'
+    block_size: 1024
+
+model:
+    vocab_size: 50257 # gpt2 vocab
