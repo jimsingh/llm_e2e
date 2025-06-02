@@ -4,3 +4,9 @@ data:
 
 model:
     vocab_size: 50257 # gpt2 vocab
+
+training:
+    batch_size: 2
+
+system:
+    device: cpu
