@@ -7,7 +7,10 @@ model:
     vocab_size: 50257 # gpt2 vocab
 
 training:
-    batch_size: 8
+    batch_size: 1
+    log_interval: 10
+    eval_iters: 10
+    eval_interval: 50
 
 system:
     device: cpu
