@@ -65,7 +65,7 @@ gen_f(m)
     - added dropout to avoid overfitting and improve generalization
     - added generate method to watch the model learn while training
     - wrote basic model dict saving / restore
-- [x] **Pre-Training**: Basic pre-training including logging and tensorboard
+- [x] **Pre-Training**: Basic pre-training including eval logging, checkpointing, and logging for wandb 
     - write a basic training script from pytorch references
     - made changes required to move model/tensors to gpu, using tensor cores, bfloat16, compiling model
     - improved output stauts printing
@@ -74,4 +74,8 @@ gen_f(m)
 - [ ] **Evaluation**: Implement eval strategies for next token completion and instruction handling
 - [ ] **ML Ops**: Deploy wandb for productionalization
 
-
+# Future Scope 
+- Sparse Attention, Flash Attention
+- LR Warmup / Cosine Decay  
+- Distriuted Data Parallel / Full Sharded Data Parallel
+- Optimizing training for TPU trillium (v6e) - (but VRAM is < RTX 6000 Ada)
