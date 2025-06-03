@@ -3,9 +3,16 @@
 **Project Goal:** Build an end-to-end pipeline to pre-train, fine-tune, and evaluate a language model that starts with a basic GPT2
 implementation and introduces features over time.
 
-**Status**: using fineweb-edu, trained a 124M parameter model for ~10 hours on a RTX 6000 Ada 48 GB, resulting in a final loss 3.7.
+**Status**: using fineweb-edu, trained a 124M parameter model for ~10 hours on a RTX 6000 Ada 48 GB, resulting in a loss 3.7 (perplexity of 40 of ~50000). Here is what that looks like:
 
----
+```python
+gen_f = lambda m: generate_text(m, enc, "tomorrow is")
+gen_f(m)
+
+'tomorrow is twice extreme times six dual in 7 price for e decrypted down into the ssh. asked you visualize'
+```
+
+... whatever you say GPT2.
 
 ## Prototype code in Jupyter Notebooks:
 
