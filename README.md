@@ -1,4 +1,4 @@
-# LLM end-to-end project TODO list
+# LLM end-to-end project 
 
 **Project Goal:** Build an end-to-end pipeline to pre-train, fine-tune, and evaluate a language model that starts with a basic GPT2
 implementation and introduces features over time.
@@ -52,7 +52,7 @@ gen_f(m)
 
 ---
 
-# Updated TODO List:
+# TODO List:
 
 - [x] **Data Loading**: Get a very small dataset, imdb, and fineweb loading and set up for training / validation
     - loaded tiny shakespeare to test the model, ensuring it can be overfit to one batch
@@ -64,13 +64,14 @@ gen_f(m)
       connecting gpt2 TF implementation with my rewrite
     - added dropout to avoid overfitting and improve generalization
     - added generate method to watch the model learn while training
+    - wrote basic model dict saving / restore
 - [x] **Pre-Training**: Basic pre-training including logging and tensorboard
     - write a basic training script from pytorch references
     - made changes required to move model/tensors to gpu, using tensor cores, bfloat16, compiling model
-    - improved output s
-    - wrote basic model dict saving / restore
-    - todo: implement checkpointing and logging to disk for reporting
+    - improved output stauts printing
+    [ ] TODO: implement checkpointing and logging for reporting
 - [ ] **Finetuning**: train for sentiment classification and instruction following
-- [ ] **Evaluation**: Identify straightforward eval strategies for next token completion and instruction handling
+- [ ] **Evaluation**: Implement eval strategies for next token completion and instruction handling
+- [ ] **ML Ops**: Deploy wandb for productionalization
 
 
