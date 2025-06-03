@@ -1,12 +1,13 @@
 data:
-    dataset_name: 'karpathy/tiny_shakespeare'
+    dataset_path: 'HuggingFaceFW/fineweb-edu'
+    dataset_name: 'sample-10BT'
     block_size: 1024
 
 model:
     vocab_size: 50257 # gpt2 vocab
 
 training:
-    batch_size: 2
+    batch_size: 8
 
 system:
     device: cpu
