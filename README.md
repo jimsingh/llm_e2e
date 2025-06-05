@@ -42,6 +42,13 @@ gen_f(m)
     * Saving the trained model's state dictionary and the full model.
     * TODO: logging for wandb
 
+* **`notebook/04_load_openai_gpt2_123M.ipynb`**: downloads and loads the model parameters released by open ai
+    * T2T and the GPT2 model use a fused QKV parameter and split after the matrix multiply. This might have
+      some performance benefits, but it's having separate parameters maps better to the AIAYN paper. But, I had to split
+      the params manually during loading. Also worth noting is that QKV bias is used in the GPT2 model and I had to load
+      these parameters. The rest is basically just key mapping.
+    * Added some basic tests to ensure the model is coherent.
+
 * **`notebooks/99_tests.ipynb`**: This notebook contains some integration tests for the project to ensure things stay sane.
         * Sets up a test configuration (`GPT2Config`) with smaller parameters for quick testing.
         * Initializes the `ShakespeareDataloader` with the test configuration and tokenizer.
