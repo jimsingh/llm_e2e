@@ -16,11 +16,11 @@ gen_f(m)
 
 ## Prototype code in Jupyter Notebooks:
 
-* **`notebooks/00_config.ipynb`**: defines the `GPT2Config` dataclass, which manages configuration parameters for the GPT-2 model and training process. This grew overtime to handle all settings related to data (dataset path, name, block size), model architecture (vocab size, embedding dimensions, number of layers/heads), training hyperparameters (learning rate, batch size, epochs), and system settings (device, model compilation). The configuration can be loaded from and saved to YAML files. It also includes a utility to estimate the total number of parameters in the model based on the configuration.
+* **`llm_e2e/config.py`**: defines the `GPT2Config` dataclass, which manages configuration parameters for the GPT-2 model and training process. This grew overtime to handle all settings related to data (dataset path, name, block size), model architecture (vocab size, embedding dimensions, number of layers/heads), training hyperparameters (learning rate, batch size, epochs), and system settings (device, model compilation). The configuration can be loaded from and saved to YAML files. It also includes a utility to estimate the total number of parameters in the model based on the configuration.
 
-* **`notebooks/01_data_pipeline.ipynb`**: focuses on data loading and preprocessing. It includes implementations for:
+* **`src/llm_e2e/dataset.py`**: focuses on data loading and preprocessing. It includes implementations for:
     * `ShakespeareDataloader` that loads 'karpathy/tiny_shakespeare' dataset fully into memory, tokenizes it using `tiktoken`, and prepares batches (x,y pairs) for training.
-    * A `GeneratorWrapper` class to stream data from Hugging Face datasets, suitable for larger datasets like 'HuggingFaceFW/fineweb-edu'. This wrapper handles shuffling, tokenization, and batch creation on the fly.
+    * A `StreamingDatasetGenerator` class to stream data from Hugging Face datasets. This wrapper handles shuffling, tokenization, and batch creation and exposes a python iterator. 
     * Utilities for checking data quality, such as analyzing token frequencies and vocabulary coverage, and printing sample input/output pairs.
 
 * **`notebooks/02_gpt2_model.ipynb`**: PyTorch implementation of the GPT-2 model architecture. Key components defined include:

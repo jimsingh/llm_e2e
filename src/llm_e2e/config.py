@@ -5,7 +5,7 @@ from typing import Any, ClassVar
 @dataclass
 class GPT2Config:
     FIELD_SECTIONS: ClassVar[dict[str, list[str]]] = {
-        "data": ["dataset_path", "dataset_name", "block_size"],
+        "data": ["dataset_path", "dataset_name"],
         "tokenizer": ["encoding_name", "eos_token_id"],
         "model": [
             "vocab_size", "context_length", "emb_dim",
@@ -20,46 +20,45 @@ class GPT2Config:
     }
 
     # Data
-    dataset_path: str = 'HuggingFaceFW/fineweb-edu'
-    dataset_name: str = 'sample-10BT'
-    block_size: int = 1024
+    dataset_path: str                   = 'HuggingFaceFW/fineweb-edu'
+    dataset_name: str                   = 'sample-10BT'
 
     # tokenizer
-    encoding_name: str = 'gpt2'
-    eos_token_id: int = 50256 # token_id of '<|endoftext|>'
+    encoding_name: str                  = 'gpt2'
+    eos_token_id: int                   = 50256 # token_id of '<|endoftext|>'
     
     # Model architecture
-    vocab_size: int = 50257 # gpt2 BPE n_tokens
-    context_length: int = 1024
-    emb_dim: int = 768
-    n_heads: int = 12
-    n_layers: int = 12
-    dropout_rate: float = 0.1
-    qkv_bias: bool = False
-    mlp_bias: bool = True 
+    vocab_size: int                     = 50257 # gpt2 BPE n_tokens
+    context_length: int                 = 1024
+    emb_dim: int                        = 768
+    n_heads: int                        = 12
+    n_layers: int                       = 12
+    dropout_rate: float                 = 0.1
+    qkv_bias: bool                      = False
+    mlp_bias: bool                      = True 
     
     # Training hyperparameters
-    num_epochs: int = 2
-    learning_rate: float = 6e-4
-    weight_decay: float = 0.1
-    beta1: float = 0.9
-    beta2: float = 0.95
-    grad_clip: float = 1.0
-    warmup_steps: int = 2_000
-    max_steps: int = 600_000
+    num_epochs: int                     = 2
+    learning_rate: float                = 6e-4
+    weight_decay: float                 = 0.1
+    beta1: float                        = 0.9
+    beta2: float                        = 0.95
+    grad_clip: float                    = 1.0
+    warmup_steps: int                   = 2_000
+    max_steps: int                      = 600_000
     
     # Training setup
-    batch_size: int = 8
-    log_interval: int = 200
-    eval_iters: int = 50
-    eval_interval: int = 1_00
-    save_interval: int = 10_000
-    save_filename: str = field(init = False)
+    batch_size: int                     = 8
+    log_interval: int                   = 200
+    eval_iters: int                     = 50
+    eval_interval: int                  = 1_00
+    save_interval: int                  = 10_000
+    save_filename: str                  = field(init = False)
     
     # System
-    device: str = "cuda"
-    compile_model: bool = True
-    dtype: str = "bfloat16"
+    device: str                         = 'cuda'
+    compile_model: bool                 = True
+    dtype: str                          = "bfloat16"
     
     @classmethod
     def from_yaml(cls, yaml_path: str) -> 'GPT2Config':
@@ -67,7 +66,7 @@ class GPT2Config:
         with open(yaml_path, 'r') as f:
             config_dict = yaml.safe_load(f)
         
-        # Flatten nested structure
+        # flatten nested structure
         flat_dict = {}
         if config_dict:
             for section, params in config_dict.items():
@@ -78,6 +77,9 @@ class GPT2Config:
             print(f"loaded config from: {yaml_path}")
         else:
             print(f"no yaml config found in {yaml_path}, using defaults")
+
+        # remove block_size if present
+        flat_dict.pop('block_size', None)
         return cls(**flat_dict)
     
     def to_yaml(self, yaml_path: str) -> None:
@@ -117,8 +119,45 @@ class GPT2Config:
         total_params = token_emb + pos_emb + transformer_blocks + layer_norms
         return total_params
     
+    @property
+    def block_size(self) -> int:
+        """For backward compatibility, block_size is an alias for context_length."""
+        return self.context_length
+    
     def __post_init__(self):
         """Validate configuration after initialization."""
+        # Validate batch_size
+        if self.batch_size <= 0:
+            raise ValueError(f"batch_size must be positive, got {self.batch_size}")
+        # Validate context_length
+        if self.context_length <= 0:
+            raise ValueError(f"context_length must be positive, got {self.context_length}")
+        # Validate emb_dim
+        if self.emb_dim <= 0:
+            raise ValueError(f"emb_dim must be positive, got {self.emb_dim}")
+        # Validate n_heads
+        if self.n_heads <= 0:
+            raise ValueError(f"n_heads must be positive, got {self.n_heads}")
+        # Validate n_layers
+        if self.n_layers <= 0:
+            raise ValueError(f"n_layers must be positive, got {self.n_layers}")
+        # Validate dropout_rate
+        if not 0 <= self.dropout_rate <= 1:
+            raise ValueError(f"dropout_rate must be between 0 and 1, got {self.dropout_rate}")
+        # Validate learning_rate (handle scientific notation)
+        if isinstance(self.learning_rate, str):
+            try:
+                self.learning_rate = float(self.learning_rate)
+            except ValueError:
+                raise ValueError(f"learning_rate must be a valid number, got {self.learning_rate}")
+        if self.learning_rate <= 0:
+            raise ValueError(f"learning_rate must be positive, got {self.learning_rate}")
+        # Validate weight_decay
+        if self.weight_decay < 0:
+            raise ValueError(f"weight_decay must be non-negative, got {self.weight_decay}")
+        # Validate num_epochs
+        if self.num_epochs <= 0:
+            raise ValueError(f"num_epochs must be positive, got {self.num_epochs}")
+        # Now check divisibility
         assert self.emb_dim % self.n_heads == 0, f"emb_dim ({self.emb_dim}) must be divisible by n_heads ({self.n_heads})"
-        assert self.context_length == self.block_size, f"context_length ({self.context_length}) should equal block_size ({self.block_size})"
         self.save_filename = f"{self.dataset_path.replace('/','_')}.{self.n_params}.pt" 
