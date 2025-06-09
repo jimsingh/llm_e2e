@@ -119,11 +119,6 @@ class GPT2Config:
         total_params = token_emb + pos_emb + transformer_blocks + layer_norms
         return total_params
     
-    @property
-    def block_size(self) -> int:
-        """For backward compatibility, block_size is an alias for context_length."""
-        return self.context_length
-    
     def __post_init__(self):
         """Validate configuration after initialization."""
         # Validate batch_size
