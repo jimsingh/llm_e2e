@@ -1,0 +1,26 @@
+data:
+    dataset_path: 'shahrukhx01/wikipedia-bookscorpus-en-preprocessed'
+    dataset_name: 'default'
+    block_size: 256
+
+model:
+    vocab_size: 50257 # gpt2 vocab
+    context_length: 256
+    emb_dim: 384
+    n_heads: 6
+    n_layers: 6
+    dropout_rate: 0.1
+    qkv_bias: False
+    mlp_bias: True
+
+training:
+    num_epochs: 20
+    learning_rate: 0.0003
+    batch_size: 48 
+    log_interval: 100
+    eval_iters: 50
+    eval_interval: 500
+    save_interval: 500
+
+system:
+    device: cuda 
