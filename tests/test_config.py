@@ -2,22 +2,6 @@ import pytest
 import os
 from llm_e2e import GPT2Config
 
-@pytest.fixture
-def sample_config():
-    cfg = GPT2Config()
-    cfg.batch_size = 4
-    cfg.context_length = 8
-    cfg.emb_dim = 64
-    cfg.n_heads = 4
-    cfg.n_layers = 2
-    cfg.dropout_rate = 0.1
-    cfg.learning_rate = 1e-4
-    cfg.weight_decay = 0.01
-    cfg.num_epochs = 10
-    cfg.device = 'cpu'
-    cfg.save_filename = 'test_model.pt'
-    return cfg
-
 def test_config_initialization():
     cfg = GPT2Config()
     assert hasattr(cfg, 'batch_size')

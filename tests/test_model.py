@@ -3,19 +3,6 @@ import torch
 from llm_e2e.config import GPT2Config
 from llm_e2e.model import GPT2Model, MultiHeadAttention, TransformerBlock
 
-@pytest.fixture
-def sample_config():
-    return GPT2Config(
-        vocab_size=1000,
-        emb_dim=64,
-        n_heads=4,
-        n_layers=2,
-        dropout_rate=0.1,
-        batch_size=4,
-        context_length=32,
-        qkv_bias=False
-    )
-
 def test_multi_head_attention(sample_config):
     attn = MultiHeadAttention(
         d_in=sample_config.emb_dim,

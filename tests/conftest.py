@@ -12,6 +12,31 @@ def tokenizer():
     return tiktoken.get_encoding('gpt2')
 
 @pytest.fixture
+def sample_config():
+    """A generic config for testing with reasonable values."""
+    cfg = GPT2Config(
+        vocab_size=1000,
+        emb_dim=64,
+        n_heads=4,
+        n_layers=2,
+        dropout_rate=0.1,
+        batch_size=4,
+        context_length=32,
+        qkv_bias=False,
+        device='cpu',
+        learning_rate=1e-4,
+        weight_decay=0.01,
+        num_epochs=2
+    )
+    # Set extra attributes not in the constructor
+    cfg.dataset_path = "karpathy/tiny_shakespeare"
+    cfg.dataset_name = "tiny_shakespeare"
+    cfg.shuffle = True
+    cfg.streaming = True
+    cfg.save_filename = 'test_model.pt'
+    return cfg
+
+@pytest.fixture
 def small_config():
     """A minimal config for testing with small values."""
     cfg = GPT2Config()
