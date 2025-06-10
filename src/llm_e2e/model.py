@@ -30,7 +30,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-class GPTModel(nn.Module):
+from llm_e2e import GPT2Config
+
+class GPT2Model(nn.Module):
     """
     The high-level tensorflow model structure released by OpenAI translated to pytorch.
     
