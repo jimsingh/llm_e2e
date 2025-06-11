@@ -49,25 +49,25 @@ def test_streaming_data_loader_shuffling_and_determinism():
     cfg = GPT2Config(
         batch_size=2,
         context_length=16,
-        dataset_path="karpathy/tiny_shakespeare",
-        dataset_name="tiny_shakespeare"
+        dataset_path = "wikimedia/wikipedia",
+        dataset_name = "20231101.simple"
     )
 
     tokenizer = tiktoken.get_encoding('gpt2')
 
     # Create a loader with a specific seed and get the first batch
-    loader1 = StreamingDatasetGenerator(cfg, tokenizer, split='train', seed=123)
+    loader1 = StreamingDatasetGenerator(cfg, tokenizer, split='train', seed=123, shuffle_buffer_size=100)
     X1, Y1 = next(iter(loader1))
 
     # Create another loader with the same seed, it should produce the same batch
-    loader2 = StreamingDatasetGenerator(cfg, tokenizer, split='train', seed=123)
+    loader2 = StreamingDatasetGenerator(cfg, tokenizer, split='train', seed=123, shuffle_buffer_size=100)
     X2, Y2 = next(iter(loader2))
 
     assert torch.equal(X1, X2), "Batches with the same seed should be identical"
     assert torch.equal(Y1, Y2), "Batches with the same seed should be identical"
 
     # Create a third loader with a different seed, it should produce a different batch
-    loader3 = StreamingDatasetGenerator(cfg, tokenizer, split='train', seed=456)
+    loader3 = StreamingDatasetGenerator(cfg, tokenizer, split='train', seed=456, shuffle_buffer_size=100)
     X3, Y3 = next(iter(loader3))
 
     assert not torch.equal(X1, X3), "Batches with different seeds should not be identical"
@@ -77,7 +77,7 @@ def test_consecutive_batches_are_different(sample_config, tokenizer):
     Tests that two consecutively drawn batches are not the same,
     which is expected with shuffling enabled.
     """
-    loader = StreamingDatasetGenerator(sample_config, tokenizer, split='train')
+    loader = StreamingDatasetGenerator(sample_config, tokenizer, split='train', shuffle_buffer_size=100)
 
     # get the first batch
     X1, _ = next(iter(loader))

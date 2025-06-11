@@ -14,7 +14,8 @@ class StreamingDatasetGenerator:
     """Loads a Hugging Face dataset and wraps it as a generator."""
     
     def __init__(self, cfg: GPT2Config, encoding: Any, split: str = 'train', 
-                 dataset_split: str = 'train', seed: int = 42, val_frac: float = 0.1):
+                 dataset_split: str = 'train', seed: int = 42, val_frac: float = 0.1,
+                 shuffle_buffer_size=1_000_000):
         self.counter = 0
         self.split = split
         self.cfg = cfg
@@ -22,7 +23,7 @@ class StreamingDatasetGenerator:
         self.seed = seed
         self.val_frac = val_frac
         self._get_text = lambda d: d if isinstance(d, str) else d['text']
-        
+        self.shuffle_buffer_size = shuffle_buffer_size 
         # Load the base dataset
         self.base_dataset: IterableDataset = load_dataset(
             path=self.cfg.dataset_path,
@@ -37,7 +38,7 @@ class StreamingDatasetGenerator:
         epoch_seed = self.seed + self.counter
         
         # Create shuffled dataset for this epoch with larger buffer
-        self.dataset = self.base_dataset.shuffle(seed=epoch_seed, buffer_size=100000)
+        self.dataset = self.base_dataset.shuffle(seed=epoch_seed, buffer_size=self.shuffle_buffer_size)
         
         # Reset batch generator
         if hasattr(self, '_batch_generator'):
