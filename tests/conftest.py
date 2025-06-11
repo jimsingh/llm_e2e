@@ -32,8 +32,8 @@ def sample_config():
         wandb_run_name=None
     )
     # Set extra attributes not in the constructor
-    cfg.dataset_path = "karpathy/tiny_shakespeare"
-    cfg.dataset_name = "tiny_shakespeare"
+    cfg.dataset_path = "wikimedia/wikipedia"
+    cfg.dataset_name = "20231101.simple"
     cfg.shuffle = True
     cfg.streaming = True
     cfg.save_filename = 'test_model.pt'

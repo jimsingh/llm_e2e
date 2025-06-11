@@ -100,3 +100,4 @@ def test_gpt_gradient_flow(sample_config):
         assert param.grad is not None
         assert not torch.isnan(param.grad).any()
         assert not torch.isinf(param.grad).any() 
+ 

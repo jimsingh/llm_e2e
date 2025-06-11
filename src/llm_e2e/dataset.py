@@ -3,80 +3,114 @@ Wrapper for hugging face datasets. Stream, shuffle, and generate batches setup f
 next token prediction.
 """
 
+import hashlib
+from typing import Any, Iterator
 import torch
-from datasets import load_dataset, Dataset
-from typing import Iterator, Any
+from datasets import load_dataset, IterableDataset
 from .config import GPT2Config
 
 
-
-class StreamingDatasetGenerator:    
-    """load a huggingface dataset and wrap it as a generator"""
-    def __init__(self, cfg: GPT2Config, encoding: Any, split: str = 'train', seed: int = 42):
+class StreamingDatasetGenerator:
+    """Loads a Hugging Face dataset and wraps it as a generator."""
+    
+    def __init__(self, cfg: GPT2Config, encoding: Any, split: str = 'train', 
+                 dataset_split: str = 'train', seed: int = 42, val_frac: float = 0.1):
         self.counter = 0
-        self.seed = seed
         self.split = split
         self.cfg = cfg
         self.encoding = encoding
-        dataset = load_dataset(
+        self.seed = seed
+        self.val_frac = val_frac
+        self._get_text = lambda d: d if isinstance(d, str) else d['text']
+        
+        # Load the base dataset
+        self.base_dataset: IterableDataset = load_dataset(
             path=self.cfg.dataset_path,
             name=self.cfg.dataset_name,
-            split=split,
+            split=dataset_split if dataset_split is not None else 'train',
             streaming=True
         )
-        self.dataset = dataset.shuffle(seed=seed, buffer_size=10000)
         
-    def __iter__(self) -> Iterator[tuple[torch.Tensor, torch.Tensor]]:
-        """
-        Reset the generator and return an iterator that yields batches of data.
-        
-        Returns:
-            Iterator yielding (X, Y) tensor pairs for training
-        """
+    def __iter__(self):
+        """Reset for new epoch and return self as iterator."""
         self.counter += 1
-        seed = self.seed + self.counter
-        return self.get_dataset_batch(
-            batch_size=self.cfg.batch_size,
-            seq_len=self.cfg.context_length,
-            seed=seed
-        ) 
-
-    def get_dataset_batch(self, batch_size: int, seq_len: int, seed: int = 42) -> Iterator[tuple[torch.Tensor, torch.Tensor]]:
-        """
-        Not iterator interface - access batches from the configured dataset 
+        epoch_seed = self.seed + self.counter
         
-        Args:
-            batch_size: Number of sequences per batch
-            seq_len: Length of each sequence
-            seed: Random seed for shuffling
+        # Create shuffled dataset for this epoch with larger buffer
+        self.dataset = self.base_dataset.shuffle(seed=epoch_seed, buffer_size=100000)
+        
+        # Reset batch generator
+        if hasattr(self, '_batch_generator'):
+            del self._batch_generator
             
-        Yields:
-            Tuples of (X, Y) tensors where:
-            - X has shape (batch_size, seq_len)
-            - Y has shape (batch_size, seq_len)
-            Y is shifted by 1 position from X for next-token prediction
-        """
-        # Token accumulator
+        return self
+    
+    def __next__(self) -> tuple[torch.Tensor, torch.Tensor]:
+        """Get next batch from current epoch."""
+        if not hasattr(self, '_batch_generator'):
+            self._batch_generator = self._generate_batches()
+        
+        try:
+            return next(self._batch_generator)
+        except StopIteration:
+            # Clean up for next epoch
+            if hasattr(self, '_batch_generator'):
+                del self._batch_generator
+            raise
+    
+    def _generate_batches(self) -> Iterator[tuple[torch.Tensor, torch.Tensor]]:
+        """Generate batches from the shuffled dataset."""
         all_tokens = []
-
+        max_buffer_size = self.cfg.batch_size * (self.cfg.context_length + 1) * 10
+        
         for doc in self.dataset:
+            txt = self._get_text(doc)
+            if not self._should_include_doc(txt):
+                continue
+                
             # text -> token ids
-            tokens = self.encoding.encode_ordinary(doc["text"])
+            tokens = self.encoding.encode_ordinary(txt)
             tokens.append(self.encoding.eot_token)
             all_tokens.extend(tokens)
-
-            # only yield full batches
-            while len(all_tokens) >= batch_size * (seq_len + 1):
-                # extract batch worth of tokens
-                batch_tokens = all_tokens[:batch_size * (seq_len + 1)]
-                all_tokens = all_tokens[batch_size * (seq_len + 1):]
-
-                # to tensor and appropriate shape 
-                batch_tokens = torch.tensor(batch_tokens, dtype=torch.long)
-                batch_tokens = batch_tokens.view(batch_size, seq_len + 1)
-
-                # X, Y split for next-token prediction
-                X = batch_tokens[:, :-1]  
-                Y = batch_tokens[:, 1:] 
-
-                yield X, Y
+            
+            # Prevent unbounded memory growth
+            if len(all_tokens) > max_buffer_size:
+                # Yield all complete batches we can make
+                while len(all_tokens) >= self.cfg.batch_size * (self.cfg.context_length + 1):
+                    yield self._create_batch(all_tokens)
+                # Break to avoid memory issues - we'll get more data next epoch
+                break
+            
+            # Yield batches as they become available
+            while len(all_tokens) >= self.cfg.batch_size * (self.cfg.context_length + 1):
+                yield self._create_batch(all_tokens)
+    
+    def _create_batch(self, all_tokens: list) -> tuple[torch.Tensor, torch.Tensor]:
+        """Extract and return one batch from token buffer."""
+        batch_size = self.cfg.batch_size
+        seq_len = self.cfg.context_length
+        
+        # Extract batch worth of tokens
+        batch_tokens = all_tokens[:batch_size * (seq_len + 1)]
+        del all_tokens[:batch_size * (seq_len + 1)]
+        
+        # Convert to tensor and reshape
+        batch_tokens = torch.tensor(batch_tokens, dtype=torch.long)
+        batch_tokens = batch_tokens.view(batch_size, seq_len + 1)
+        
+        # Split for next-token prediction
+        X = batch_tokens[:, :-1]  # (batch_size, seq_len)
+        Y = batch_tokens[:, 1:]   # (batch_size, seq_len)
+        
+        return X, Y
+    
+    def _should_include_doc(self, text: str) -> bool:
+        """Decide if a document belongs to train or val based on hash of its content."""
+        doc_hash = hashlib.md5(text.encode('utf-8')).hexdigest()
+        hash_int = int(doc_hash, 16)
+        hash_fraction = (hash_int % 10000) / 10000.0
+        
+        if self.split == 'train':
+            return hash_fraction >= self.val_frac
+        else:  # validation
+            return hash_fraction < self.val_frac

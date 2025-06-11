@@ -118,3 +118,4 @@ def test_config_from_dict():
     assert config.wandb_log == False
     assert config.wandb_project == 'llm_e2e'
     assert config.wandb_run_name is not None  # Should be set to 'train_' + timestamp
+ 
