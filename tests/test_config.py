@@ -79,3 +79,42 @@ def test_config_parameter_validation():
     # Test invalid number of epochs
     with pytest.raises(ValueError):
         GPT2Config(num_epochs=0)
+
+def test_config_from_dict():
+    config_dict = {
+        'vocab_size': 1000,
+        'emb_dim': 64,
+        'n_heads': 4,
+        'n_layers': 2,
+        'dropout_rate': 0.1,
+        'batch_size': 4,
+        'context_length': 32,
+        'qkv_bias': False,
+        'dataset_path': 'test/path',
+        'dataset_name': 'test_dataset',
+        'device': 'cpu',
+        'learning_rate': 1e-4,
+        'weight_decay': 0.01,
+        'num_epochs': 2,
+        'wandb_log': False,
+        'wandb_project': 'llm_e2e',
+        'wandb_run_name': None
+    }
+    config = GPT2Config.from_dict(config_dict)
+    assert config.vocab_size == 1000
+    assert config.emb_dim == 64
+    assert config.n_heads == 4
+    assert config.n_layers == 2
+    assert config.dropout_rate == 0.1
+    assert config.batch_size == 4
+    assert config.context_length == 32
+    assert config.qkv_bias == False
+    assert config.dataset_path == 'test/path'
+    assert config.dataset_name == 'test_dataset'
+    assert config.device == 'cpu'
+    assert config.learning_rate == 1e-4
+    assert config.weight_decay == 0.01
+    assert config.num_epochs == 2
+    assert config.wandb_log == False
+    assert config.wandb_project == 'llm_e2e'
+    assert config.wandb_run_name is not None  # Should be set to 'train_' + timestamp

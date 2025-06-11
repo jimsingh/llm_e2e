@@ -26,7 +26,10 @@ def sample_config():
         device='cpu',
         learning_rate=1e-4,
         weight_decay=0.01,
-        num_epochs=2
+        num_epochs=2,
+        wandb_log=False,
+        wandb_project='llm_e2e',
+        wandb_run_name=None
     )
     # Set extra attributes not in the constructor
     cfg.dataset_path = "karpathy/tiny_shakespeare"
