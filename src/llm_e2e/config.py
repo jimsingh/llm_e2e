@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 import yaml
 from typing import Any, ClassVar
+import time
 
 @dataclass
 class GPT2Config:
@@ -17,6 +18,7 @@ class GPT2Config:
             "eval_iters", "eval_interval", "save_interval"
         ],
         "system": ["device", "compile_model", "dtype"],
+        "logging": ["wandb_log", "wandb_project", "wandb_run_name"],
     }
 
     # Data
@@ -59,6 +61,11 @@ class GPT2Config:
     device: str                         = 'cuda'
     compile_model: bool                 = True
     dtype: str                          = "bfloat16"
+
+    # Logging
+    wandb_log: bool                     = False
+    wandb_project: str                  = "llm_e2e"
+    wandb_run_name: str                 = ""
     
     @classmethod
     def from_yaml(cls, yaml_path: str) -> 'GPT2Config':
@@ -81,6 +88,10 @@ class GPT2Config:
         # remove block_size if present
         flat_dict.pop('block_size', None)
         return cls(**flat_dict)
+    
+    @classmethod
+    def from_dict(cls, config_dict):
+        return cls(**config_dict)
     
     def to_yaml(self, yaml_path: str) -> None:
         """Save config to nested YAML structure."""
@@ -155,4 +166,7 @@ class GPT2Config:
             raise ValueError(f"num_epochs must be positive, got {self.num_epochs}")
         # Now check divisibility
         assert self.emb_dim % self.n_heads == 0, f"emb_dim ({self.emb_dim}) must be divisible by n_heads ({self.n_heads})"
-        self.save_filename = f"{self.dataset_path.replace('/','_')}.{self.n_params}.pt" 
+        self.save_filename = f"{self.dataset_path.replace('/','_')}.{self.n_params}.pth"
+        # Set wandb_run_name if not provided
+        if not self.wandb_run_name:
+            self.wandb_run_name = f"{self.save_filename}_train_{time.time()}" 
