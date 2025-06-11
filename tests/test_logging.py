@@ -46,4 +46,4 @@ def test_wandb_logger_context_manager(sample_config, sample_model, mock_wandb):
 def test_wandb_logger_logging(sample_config, sample_model, mock_wandb):
     logger = WandbLogger(sample_config, sample_model)
     logger.log(step=1, loss=0.5, accuracy=0.9)
-    mock_wandb['log'].assert_called_once_with(step=1, commit=True, loss=0.5, accuracy=0.9) 
+    mock_wandb['log'].assert_called_once_with(step=1, commit=True, data={'loss': 0.5, 'accuracy': 0.9}) 
