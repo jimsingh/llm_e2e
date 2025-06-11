@@ -37,4 +37,4 @@ class WandbLogger:
     def log(self, step, **kwargs):
         """Logs kwargs to wandb (if logging is enabled)."""
         if self.use_wandb:
-            wandb.log(step=step, commit=True, **kwargs)
+            wandb.log(step=step, commit=True, data=kwargs)
