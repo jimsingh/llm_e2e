@@ -69,9 +69,9 @@ class GPT2Trainer:
         # remove torch.compile wrapper if needed (most of the time)
         self._orig_model = model._orig_mod if hasattr(model, '_orig_mod') else model
     
-    def log(self, message: str, metrics: dict = None):
+    def log(self, message: str, metrics: dict = None, commit: bool = True):
         """unified logging method"""
-        print(message)
+        print(f"{self.state.step}: {message}")
         
         # GPU memory logging
         if metrics and metrics.get('log_gpu_memory') and self.device.type == 'cuda':
@@ -93,7 +93,7 @@ class GPT2Trainer:
             # remove internal flags 
             wandb_metrics = {k: v for k, v in metrics.items() if not k.startswith('log_') and k not in ('step')}
             if wandb_metrics:
-                self.logger.log(step=self.state.step, **wandb_metrics)
+                self.logger.log(step=self.state.step, commit=commit, **wandb_metrics)
     
     def train(self, text_generator = None):
         """main training loop"""
@@ -101,8 +101,7 @@ class GPT2Trainer:
         self.log(
             f"Starting training on {self.device}\n"
             f"Model parameters: {self.cfg.n_params:_}\n"
-            f"Model parameters file: {self.cfg.save_filename}",
-            {'log_gpu_memory': True}
+            f"Model parameters file: {self.cfg.save_filename}"
         )
         
         try:
@@ -140,8 +139,7 @@ class GPT2Trainer:
         # log epoch start
         self.log(
             f"\n[Epoch {epoch + 1}/{self.cfg.num_epochs}] "
-            f"Started at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
-            {'epoch': epoch + 1, 'log_gpu_memory': True}
+            f"Started at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
         )
         
         for i, (X, Y) in enumerate(self.train_loader):
@@ -151,7 +149,10 @@ class GPT2Trainer:
             loss = self._train_batch(X, Y)
             self.state.running_loss += loss.item()
             
-            # periodic logging
+            # periodic evaluation
+            if (i + 1) % self.cfg.eval_interval == 0:
+                self._evaluate_and_checkpoint(epoch, i, text_generator)
+
             if (i + 1) % self.cfg.log_interval == 0:
                 avg_loss = self.state.running_loss / self.cfg.log_interval
                 self.log(
@@ -160,10 +161,6 @@ class GPT2Trainer:
                 )
                 self.state.running_loss = 0.0
             
-            # periodic evaluation
-            if (i + 1) % self.cfg.eval_interval == 0:
-                self._evaluate_and_checkpoint(epoch, i, text_generator)
-                self.state.running_loss = 0.0
     
     def _train_batch(self, X, Y):
         """process single training batch"""
@@ -188,23 +185,19 @@ class GPT2Trainer:
             'epoch': epoch + 1
         }
         
+        # generate and log sample text
+        if text_generator:
+            completion = text_generator(self.model)
+            print(f"[{epoch + 1}/{batch_idx + 1:5d}] {completion}")
+            metrics['generated_text'] = completion
+        
         # log evaluation
         self.log(
             f"[{epoch + 1}/{batch_idx + 1:5d}] "
             f"Train loss: {losses['train']:.4f}, Val loss: {losses['val']:.4f}",
-            metrics
+            metrics,
+            commit = False
         )
-        
-        # generate and log sample text
-        if text_generator:
-            completion = text_generator(self.model)
-            self.log(f"[{epoch + 1}/{batch_idx + 1:5d}] {completion}")
-            if self.logger:
-                # let the logger handle wandb table formatting
-                self.logger.log(
-                    generated_text=completion,
-                    step=self.state.step
-                )
         
         # save checkpoint
         checkpoint_name = f"{self.cfg.save_filename}_{epoch}"
@@ -214,7 +207,6 @@ class GPT2Trainer:
         if losses['val'] < self.state.best_val_loss:
             self.state.best_val_loss = losses['val']
             self.save_checkpoint(f"{self.cfg.save_filename}_best")
-            self.log(f"New best validation loss: {losses['val']:.4f}")
     
     @torch.no_grad()
     def evaluate(self) -> dict[str, float]:
