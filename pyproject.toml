@@ -3,7 +3,7 @@ name = "llm_e2e"
 version = "0.1.0"
 description = "End-to-end LLM training and inference pipeline"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.11"
 license = {text = "MIT"}
 authors = [
     {name = "Jim Singh"}
@@ -42,6 +42,7 @@ extra-index-url = [ "https://download.pytorch.org/whl/nightly/cu128" ]
 [dependency-groups]
 dev = [
     "poethepoet>=0.35.0",
+    "pytest>=8.4.0",
 ]
 
 [tool.poe.tasks.register-kernel]
