@@ -53,5 +53,8 @@ def small_config():
     cfg.weight_decay = 0.01
     cfg.num_epochs = 2
     cfg.device = 'cpu'
-    cfg.save_filename = 'test_model.pth'
+    cfg.save_filename = 'test_model.pth',
+    cfg.wandb_log=False
+    cfg.dataset_path = "wikimedia/wikipedia"
+    cfg.dataset_name = "20231101.simple"
     return cfg 
