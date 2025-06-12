@@ -1,17 +1,17 @@
 data:
     dataset_path: 'rahular/simple-wikipedia'
     dataset_name: 'default'
-    block_size: 1024
+    block_size: 256 
 
 model:
     vocab_size: 50257 # gpt2 vocab
     context_length: 256
-    emb_dim: int = 384
-    n_heads: int = 2
-    n_layers: int = 2
-    dropout_rate: float = 0.1
-    qkv_bias: bool = False
-    mlp_bias: bool = True
+    emb_dim: 384
+    n_heads:  2
+    n_layers: 2
+    dropout_rate: 0.1
+    qkv_bias: False
+    mlp_bias: True
     
 training:
     batch_size: 2
