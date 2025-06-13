@@ -1,9 +1,26 @@
-# LLM end-to-end project 
+# LLM End-to-End: An Experimentation and Learning Framework for Decoder-Style Language Models
 
-**Project Goal:** Build an end-to-end pipeline to pre-train, fine-tune, and evaluate a language model that starts with a basic GPT2
-implementation and introduces features over time.
+# Abstract
 
-**Status**: using fineweb-edu, trained a 124M parameter model for ~10 hours on a RTX 6000 Ada 48 GB, resulting in a loss 3.7 (perplexity of 40 of ~50000). Here is what that looks like:
+Large language models (LLMs) have become increasingly accessible and put into production across diverse applications. While the adaptability of modern pretrained models is remarkable, it is crucial to understand and debug the fundamentals of how these models work to apply them effectively. This project is a complete implementation and instrumentation framework for decoder-style language models, with a focus on the well-understood GPT-2 architecture [1]. The key components are modularized to enable systematic exploration of model behavior under different architectural and training hyperparameters. Through the extensibility of each component, the design serves as both an educational resource and a platform for conducting experiments on autoregressive language modeling. As a demonstration, I pre-train my own GPT-2 model from scratch, extract and visualize attention weights to highlight how the model interprets patterns of text, and show how the model can be aligned with human preferences.
+
+## Introduction
+
+Understanding the inner workings of large language models is critical as these systems play a more prominent role in a wide range of applications, many going well beyond simple natural language processing and token prediction. While pre-trained models are readily available, the ability to build, train, and analyze these models from first principles provides invaluable insights into their behavior, limitations, and optimization.
+
+This project has five key objectives:
+
+1. **Architecture Replication**: Reproduce the GPT-2 model architecture [1] in PyTorch with clear, documented code that connects theoretical concepts to practical implementation. Verify the implementation by loading and running OpenAI's pre-trained weights.
+
+2. **Training Framework Development**: Build an end-to-end training pipeline that including efficient data loaders optimized for next-token prediction, streaming dataset support for large-scale training, integration with [Weights & Biases](https://wandb.ai/) for ML Ops and experiment tracking, and model state checkpointing for restartability.
+
+3. **Representation Analysis**: Visualize learned representations, with particular emphasis on attention patterns [4], to provide insights into how the model processes and relates tokens within its context window.
+
+4. **Fine-tuning and Alignment**: Apply supervised fine-tuning (SFT) and alignment techniques to adapt the model to human preferences, demonstrating how base language models can be shaped for specific tasks and behaviors.
+
+5. **Performance**: Implement the highest ROI strategies to significantly improve model training and inferences performance including word alignment, quantization, KV caching, and quantization.
+
+## Text Generation
 
 ```python
 gen_f = lambda m: generate_text(m, enc, "tomorrow is")
@@ -12,9 +29,13 @@ gen_f(m)
 'tomorrow is twice extreme times six dual in 7 price for e decrypted down into the ssh. asked you visualize'
 ```
 
-... whatever you say GPT2.
+## Attention Visualization
 
-## Prototype code in Jupyter Notebooks:
+Here is a visualization of the attention patterns from the final layer of the model. This shows which tokens the model is paying attention to when processing the input sequence.
+
+![Attention Patterns for the final layer](assets/attention_patterns.png)
+
+## Code pointers
 
 * **`llm_e2e/config.py`**: defines the `GPT2Config` dataclass, which manages configuration parameters for the GPT-2 model and training process. This grew overtime to handle all settings related to data (dataset path, name, block size), model architecture (vocab size, embedding dimensions, number of layers/heads), training hyperparameters (learning rate, batch size, epochs), and system settings (device, model compilation). The configuration can be loaded from and saved to YAML files. It also includes a utility to estimate the total number of parameters in the model based on the configuration.
 
@@ -76,13 +97,28 @@ gen_f(m)
     - write a basic training script from pytorch references
     - made changes required to move model/tensors to gpu, using tensor cores, bfloat16, compiling model
     - improved output stauts printing
-    [ ] TODO: implement checkpointing and logging for reporting
-- [ ] **Finetuning**: train for sentiment classification and instruction following
 - [ ] **Evaluation**: Implement eval strategies for next token completion and instruction handling
-- [ ] **ML Ops**: Deploy wandb for productionalization
+- [ ] **Visualization**: Extract attention weights and visualize to identify patterns.
+- [ ] **Finetuning**: train for sentiment classification and instruction following
+- [X] **ML Ops**: Deploy wandb for productionalization and checkpointing for restarts
 
-# Future Scope 
-- Sparse Attention, Flash Attention
-- LR Warmup / Cosine Decay  
-- Distriuted Data Parallel / Full Sharded Data Parallel
-- Optimizing training for TPU trillium (v6e) - (but VRAM is < RTX 6000 Ada)
+
+## References
+
+[1] Radford, A., Wu, J., Child, R., Luan, D., Amodei, D., & Sutskever, I. (2019). [Language models are unsupervised multitask learners](https://cdn.openai.com/better-language-models/language_models_are_unsupervised_multitask_learners.pdf). *OpenAI blog*, 1(8), 9.
+
+[2] Vaswani, A., Shazeer, N., Parmar, N., Uszkoreit, J., Jones, L., Gomez, A. N., ... & Polosukhin, I. (2017). [Attention is all you need](https://arxiv.org/abs/1706.03762). *Advances in neural information processing systems*, 30.
+
+[3] Devlin, J., Chang, M. W., Lee, K., & Toutanova, K. (2018). [Bert: Pre-training of deep bidirectional transformers for language understanding](https://arxiv.org/abs/1810.04805). *arXiv preprint arXiv:1810.04805*.
+
+[4] Alammar, J. (2018). [The Illustrated Transformer](http://jalammar.github.io/illustrated-transformer/). Retrieved from http://jalammar.github.io/illustrated-transformer/
+
+[5] Karpathy, A. (2022). [nanoGPT](https://github.com/karpathy/nanoGPT). GitHub repository.
+
+[6] OpenAI. (2019). [GPT-2: 1.5B release](https://github.com/openai/gpt-2). GitHub repository.
+
+[7] Clark, K., Khandelwal, U., Levy, O., & Manning, C. D. (2019). [What does BERT look at? An analysis of BERT's attention](https://arxiv.org/abs/1906.04341). *Proceedings of the 2019 Conference on Empirical Methods in Natural Language Processing*.
+
+[8] Kaplan, J., McCandlish, S., Henighan, T., Brown, T. B., Chess, B., Child, R., ... & Amodei, D. (2020). [Scaling laws for neural language models](https://arxiv.org/abs/2001.08361). *arXiv preprint arXiv:2001.08361*.
+
+[9] Elhage, N., Nanda, N., Olsson, C., Henighan, T., Joseph, N., Mann, B., ... & Olah, C. (2021). [A mathematical framework for transformer circuits](https://transformer-circuits.pub/2021/framework/index.html). *Transformer Circuits Thread*.
