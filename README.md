@@ -23,17 +23,17 @@ This project has five key objectives:
 ## Text Generation
 
 ```python
-gen_f = lambda m: generate_text(m, enc, "The quick brown foxis")
+gen_f = lambda m: generate_text(m, enc, "The gold trophy would not fit in the brown suitcase because it was too large. I needed a larger"
 gen_f(m)
 
-'The quick brown fox jumps over the strip telling him his friends that there are things to do'
+'The gold trophy would not fit in the brown suitcase because it was too large. I needed a larger suitcase.'
 ```
 
 ## Attention Visualization
 
-Here is a visualization of the attention patterns from the final layer of the model. This shows which tokens the model is paying attention to when processing the input sequence.
+We'll look at the second to last layer of the model and visualize the attention heads. We'll clearly see that 'a larger' is strong attention to 'brown suitcase', indicating that the model understands the relationship. The 2 vertical blocks corresponding to the rows for 'a' and 'larger'.
 
-![Attention Patterns for the final layer](assets/attention_gpt_bert_layer7.png)
+![Attention Patterns for the second to last layer](assets/attention_gpt2_774M_layer11.png)
 
 ## Code pointers
 
