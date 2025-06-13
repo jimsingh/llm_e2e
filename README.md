@@ -31,9 +31,10 @@ gen_f(m)
 
 ## Attention Visualization
 
-We'll look at the second to last layer of the model and visualize the attention heads. We'll clearly see that 'a larger' is strong attention to 'brown suitcase', indicating that the model understands the relationship. The 2 vertical blocks corresponding to the rows for 'a' and 'larger'.
+The [visualization notebook](notebooks/05_visualize_attention.ipynb) instruments the model and extracts attention layers during inference. We can plots these layers as a heatmap to visualize the attention relationship between tokens.
 
 ![Attention Patterns for the second to last layer](assets/attention_gpt2_774M_layer11.png)
+*Attention patterns in the second-to-last layer. The model correctly attends to 'brown suitcase' when generating 'a larger', as shown by the highlighted rows for 'a' and 'larger'.*
 
 ## Code pointers
 
@@ -44,24 +45,24 @@ We'll look at the second to last layer of the model and visualize the attention 
     * A `StreamingDatasetGenerator` class to stream data from Hugging Face datasets. This wrapper handles shuffling, tokenization, and batch creation and exposes a python iterator. 
     * Utilities for checking data quality, such as analyzing token frequencies and vocabulary coverage, and printing sample input/output pairs.
 
-* **`notebooks/02_gpt2_model.ipynb`**: PyTorch implementation of the GPT-2 model architecture. Key components defined include:
+* **`src/llm_e2e/model.py`**: (deprecates notebooks/02_gpt2_model.ipynb) PyTorch implementation of the GPT-2 model architecture. Key components defined include:
     * `GPTModel`: The main model class, which combines token and positional embeddings, a series of transformer blocks, a final layer normalization, and an output linear layer (tied to token embeddings, like GPT2). 
     * `TransformerBlock`: Implements the core transformer block with multi-head self-attention and a position-wise feed-forward network, using pre-normalization.
     * `MultiHeadAttention`: The multi-head self-attention mechanism, including causal masking for autoregressive training.
     * `FeedForward`: The position-wise feed-forward network, using GELU activation.
     * `LayerNorm`: A standard layer normalization implementation.
     * `GELU`: The Gaussian Error Linear Unit activation function.
-    The implementation references OpenAI's GPT-2 paper and Andrej Karpathy's nanoGPT. The model also includes `generate` method for text generation and following Andrej's example, can product both logits and loss in the forward pass if Ys are provided.
+    The implementation references OpenAI's GPT-2 paper and Andrej Karpathy's nanoGPT. The model also includes `generate` method for text generation and following Andrej's example, can product both logits and loss in the forward pass if Ys are provided. Instrumentation hooks were added to enable visualization of attention vectors.
 
-* **`notebooks/03_gpt2_training.ipynb`**: Orchestrates the training process, but still pretty rough. It handles: 
-    * Initializing the model, optimizer (AdamW), and data loaders.
+* **`src/llm_e2e/trainer.py`**: (deprecates notebooks/03_gpt2_training.ipynb) Executes training inclusive of logging and checkpointing. 
     * A training loop that iterates through epochs and batches, performs forward and backward passes, and updates model parameters.
     * Functions to estimate training and validation loss (`estimate_loss`, `evaluate_model`).
     * Generating sample text during training to observe model progress (`generate_text`).
     * Logging training progress, including running loss and evaluation metrics.
-    * GPU memory statistics logging if CUDA is used.
-    * Saving the trained model's state dictionary and the full model.
-    * TODO: logging for wandb
+    * Saving the trained model's state dictionary and training state.
+    * Logging to wandb and stdout
+
+* **`train.py`**: main orchestration training script. Loads configuration, checkpointed model state, sets up the optimizer, and starts training.
 
 * **`notebook/04_load_openai_gpt2_123M.ipynb`**: downloads and loads the model parameters released by open ai
     * T2T and the GPT2 model use a fused QKV parameter and split after the matrix multiply. This might have
@@ -70,13 +71,7 @@ We'll look at the second to last layer of the model and visualize the attention 
       these parameters. The rest is basically just key mapping.
     * Added some basic tests to ensure the model is coherent.
 
-* **`notebooks/99_tests.ipynb`**: This notebook contains some integration tests for the project to ensure things stay sane.
-        * Sets up a test configuration (`GPT2Config`) with smaller parameters for quick testing.
-        * Initializes the `ShakespeareDataloader` with the test configuration and tokenizer.
-        * Initializes the `GPTModel` with the test configuration.
-        * Fetches a batch of data from the dataloader.
-        * Performs a forward pass of the batch through the model.
-        * Asserts the shapes, device, and dtypes of the output logits.
+* **`tests/test_*.py`**: Unit and integration test for config, data loading, model training, and the model itself. 
 
 ---
 
@@ -98,7 +93,7 @@ We'll look at the second to last layer of the model and visualize the attention 
     - made changes required to move model/tensors to gpu, using tensor cores, bfloat16, compiling model
     - improved output stauts printing
 - [ ] **Evaluation**: Implement eval strategies for next token completion and instruction handling
-- [ ] **Visualization**: Extract attention weights and visualize to identify patterns.
+- [X] **Visualization**: Extract attention weights and visualize to identify patterns.
 - [ ] **Finetuning**: train for sentiment classification and instruction following
 - [X] **ML Ops**: Deploy wandb for productionalization and checkpointing for restarts
 
