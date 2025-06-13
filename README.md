@@ -33,7 +33,7 @@ gen_f(m)
 
 Here is a visualization of the attention patterns from the final layer of the model. This shows which tokens the model is paying attention to when processing the input sequence.
 
-![Attention Patterns for the final layer](assets/attention_patterns.png)
+![Attention Patterns for the final layer](assets/attention_gpt_bert_layer7.png)
 
 ## Code pointers
 
