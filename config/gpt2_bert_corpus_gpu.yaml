@@ -4,21 +4,21 @@ data:
     block_size: 256
 
 model:
-    vocab_size: 50257 # gpt2 vocab
+    vocab_size: 50304 # gpt2 vocab word aligneed
     context_length: 384 
     emb_dim: 384
     n_heads: 8
     n_layers: 8
-    dropout_rate: 0.1
+    dropout_rate: 0.02
     qkv_bias: False
     mlp_bias: True
 
 training:
     num_epochs: 20
-    learning_rate: 0.0007
-    batch_size: 96 
+    learning_rate: 0.009
+    batch_size: 144
     log_interval: 250
-    eval_iters: 50
+    eval_iters: 30
     eval_interval: 1000
     save_interval: 1000
 
