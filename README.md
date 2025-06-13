@@ -23,10 +23,10 @@ This project has five key objectives:
 ## Text Generation
 
 ```python
-gen_f = lambda m: generate_text(m, enc, "tomorrow is")
+gen_f = lambda m: generate_text(m, enc, "The quick brown foxis")
 gen_f(m)
 
-'tomorrow is twice extreme times six dual in 7 price for e decrypted down into the ssh. asked you visualize'
+'The quick brown fox jumps over the strip telling him his friends that there are things to do'
 ```
 
 ## Attention Visualization
@@ -107,11 +107,11 @@ Here is a visualization of the attention patterns from the final layer of the mo
 
 [1] Radford, A., Wu, J., Child, R., Luan, D., Amodei, D., & Sutskever, I. (2019). [Language models are unsupervised multitask learners](https://cdn.openai.com/better-language-models/language_models_are_unsupervised_multitask_learners.pdf). *OpenAI blog*, 1(8), 9.
 
-[2] Vaswani, A., Shazeer, N., Parmar, N., Uszkoreit, J., Jones, L., Gomez, A. N., ... & Polosukhin, I. (2017). [Attention is all you need](https://arxiv.org/abs/1706.03762). *Advances in neural information processing systems*, 30.
+[2] Vaswani, A., Shazeer, N., Parmar, N., Uszkoreit, J., Jones, L., Gomez, A. N., ... & Polosukhin, I. (2017). [Attention is all you need](https://arxiv.org/abs/1706.03762).
 
-[3] Devlin, J., Chang, M. W., Lee, K., & Toutanova, K. (2018). [Bert: Pre-training of deep bidirectional transformers for language understanding](https://arxiv.org/abs/1810.04805). *arXiv preprint arXiv:1810.04805*.
+[3] Devlin, J., Chang, M. W., Lee, K., & Toutanova, K. (2018). [Bert: Pre-training of deep bidirectional transformers for language understanding](https://arxiv.org/abs/1810.04805).
 
-[4] Alammar, J. (2018). [The Illustrated Transformer](http://jalammar.github.io/illustrated-transformer/). Retrieved from http://jalammar.github.io/illustrated-transformer/
+[4] Alammar, J. (2018). [The Illustrated Transformer](http://jalammar.github.io/illustrated-transformer/). 
 
 [5] Karpathy, A. (2022). [nanoGPT](https://github.com/karpathy/nanoGPT). GitHub repository.
 
