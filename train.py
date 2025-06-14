@@ -64,10 +64,10 @@ def main(config_yaml: str):
         weight_decay=cfg.weight_decay
     )
 
-    # create simple scheduler
+    # create simple scheduler - todo parameterize
     scheduler = CosineAnnealingLR(
         optimizer,
-        T_max=10000,  # steps to decay
+        T_max=100000,  # steps to decay
         eta_min=cfg.learning_rate * 0.1
     )
 
