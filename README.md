@@ -20,14 +20,67 @@ This project has five key objectives:
 
 5. **Performance**: Implement the highest ROI strategies to significantly improve model training and inferences performance including word alignment, quantization, KV caching, and quantization.
 
-## Text Generation
+## Training
 
-```python
-gen_f = lambda m: generate_text(m, enc, "The gold trophy would not fit in the brown suitcase because it was too large. I needed a larger"
-gen_f(m)
+### Pre-training from Scratch
 
-'The gold trophy would not fit in the brown suitcase because it was too large. I needed a larger suitcase.'
-```
+I pre-trained a 33.6M parameter GPT-2 from scratch using a curated Wikipedia + BookCorpus dataset. This corpus was originally prepared for BERT training, with all text lowercased, markdown removed, and special punctuation cleaned. My hypothesis: could a cleaner, more consistent corpus enable a model 4x smaller than GPT-2 124M to achieve similar language understanding? The preprocessed text—free from formatting distractions and inconsistent capitalization—should theoretically require less model capacity to learn core linguistic patterns.
+
+### Training Dynamics
+
+<img src="assets/validation_loss.png" alt="Validation Loss" width="600"/>
+
+The validation loss chart reveals three distinct phases:
+
+1. **High Learning Rate Phase** (LR=0.009, Steps 0-100k): Rapid initial descent from ~7.4 to ~7.0
+2. **Manual Intervention** (LR=0.0003, Steps 100k-200k): 30x learning rate reduction to prevent training collapse
+3. **Cosine Annealing** (Steps 200k-370k): Smooth convergence to best loss of 3.6432 at step 310,811
+
+**Training Duration**: Approximately 5 hours for 370k steps on a single GPU (~1,200 steps/minute)
+
+### Headroom Analysis
+
+<img src="assets/gradient_sum.png" alt="Gradient Sum" width="600"/>
+
+The monotonically increasing gradient magnitudes (0.48→0.54) throughout training indicate substantial learning headroom remains. This steady growth in gradient norms, even as validation loss improved, demonstrates the model was still finding meaningful parameter updates and exploring productive regions of the loss landscape. With 170k steps of cosine annealing completed, the persistent gradient signal suggests extended training would likely yield further improvements.
+
+### Language Acquisition
+
+Monitoring the model's completions of "The quick brown fox jumps over the..." provides insights into its linguistic development:
+
+**Step 197k** (Syntactic Chaos):
+"...carpet and proceeds to train him for the skunks last business"
+
+**Step 227k** (Action Sequence Learning):
+"...window after crossing a downhill rock indoors a kick blob"
+
+**Step 289k** (Complex Grammar, Surreal Semantics):
+"...ladder flipping across the roof and the fans throw their feet against the ground killing themselves"
+
+**Step 273k** (Brevity Emerges):
+"...wire"
+
+The progression demonstrates a clear pattern: syntactic structure → narrative patterns → length control. The model mastered grammatical rules before semantic coherence—characteristic of pure autoregressive training without grounding mechanisms.
+
+### Comparison with GPT-2 124M
+
+For context, here are GPT-2 124M's completions of the same prompt:
+
+"...curb. It's ready to go. I glance around for sinkholes..."
+"...fence."
+"...cat. drawing to me the all colourful bowl of splendor..."
+
+While GPT-2 124M shows more grounded, everyday completions, my 33.6M parameter model exhibits similar grammatical competence despite being 4x smaller. The cleaner training data appears to have enabled efficient learning of syntactic patterns, though semantic grounding remains a challenge at this scale.
+
+### Key Observations
+
+- **Perplexity-Quality Gap**: Best validation loss (3.6432) corresponded to grammatically correct but semantically unusual generations
+- **Emergent Conciseness**: Later training stages showed increasingly focused completions
+- **Data Quality Impact**: The preprocessed corpus enabled stable training dynamics despite aggressive initial learning rates
+
+Configuration: `config/gpt2-bert-corpus-gpu.yaml` | Single GPU | bfloat16 precision | torch.compile optimization
+
+# Model Interpretability
 
 ## Attention Visualization
 
@@ -36,7 +89,7 @@ The [visualization notebook](notebooks/05_visualize_attention.ipynb) instruments
 ![Attention Patterns for the second to last layer](assets/attention_gpt2_774M_layer11.png)
 *Attention patterns in the second-to-last layer. The model correctly attends to 'brown suitcase' when generating 'a larger', as shown by the highlighted rows for 'a' and 'larger'.*
 
-## Code pointers
+# Code Pointers
 
 * **`llm_e2e/config.py`**: defines the `GPT2Config` dataclass, which manages configuration parameters for the GPT-2 model and training process. This grew overtime to handle all settings related to data (dataset path, name, block size), model architecture (vocab size, embedding dimensions, number of layers/heads), training hyperparameters (learning rate, batch size, epochs), and system settings (device, model compilation). The configuration can be loaded from and saved to YAML files. It also includes a utility to estimate the total number of parameters in the model based on the configuration.
 
