@@ -4,22 +4,11 @@ This would replace the training logic in notebooks/03_gpt2_training.ipynb
 """
 import argparse
 import os
-import torch
-import tiktoken
-from pathlib import Path
-
-from llm_e2e import GPT2Config, GPT2Model, StreamingDatasetGenerator, WandbLogger, GPT2Trainer
-from llm_e2e.trainer import generate_text
-
-"""
-Training script using the integrated GPT2Trainer.
-This would replace the training logic in notebooks/03_gpt2_training.ipynb
-"""
-import argparse
-import os
 import sys
 import torch
 import tiktoken
+from torch.optim.lr_scheduler import CosineAnnealingLR
+
 from pathlib import Path
 
 from llm_e2e import GPT2Config, GPT2Model, StreamingDatasetGenerator, WandbLogger, GPT2Trainer
@@ -75,6 +64,13 @@ def main(config_yaml: str):
         weight_decay=cfg.weight_decay
     )
 
+    # create simple scheduler
+    scheduler = CosineAnnealingLR(
+        optimizer,
+        T_max=10000,  # steps to decay
+        eta_min=cfg.learning_rate * 0.1
+    )
+
     # create text generator
     gen_f = lambda m: generate_text(m, encoding, "The quick brown fox jumps over the")
 
@@ -84,6 +80,7 @@ def main(config_yaml: str):
             cfg=cfg,
             model=model,
             optimizer=optimizer,
+            scheduler=scheduler,
             train_loader=train_dataset,
             val_loader=val_dataset,
             logger=logger

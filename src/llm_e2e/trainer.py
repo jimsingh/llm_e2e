@@ -53,6 +53,7 @@ class GPT2Trainer:
         cfg: GPT2Config,
         model: torch.nn.Module,
         optimizer: torch.optim.Optimizer,
+        scheduler,
         train_loader,
         val_loader,
         logger
@@ -60,6 +61,7 @@ class GPT2Trainer:
         self.cfg = cfg 
         self.model = model
         self.optimizer = optimizer
+        self.scheduler = scheduler
         self.train_loader = train_loader
         self.val_loader = val_loader
         self.logger = logger
@@ -159,6 +161,7 @@ class GPT2Trainer:
             if (i + 1) % self.cfg.eval_interval == 0:
                 self._evaluate_and_checkpoint(epoch, i, text_generator)
                 self.state.gradient_norms.clear()
+                if self.scheduler: self.scheduler.step()
 
             if (i + 1) % self.cfg.log_interval == 0:
                 avg_loss = self.state.running_loss / self.cfg.log_interval
