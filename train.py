@@ -7,7 +7,7 @@ import os
 import sys
 import torch
 import tiktoken
-from torch.optim.lr_scheduler import CosineAnnealingLR
+from torch.optim.lr_scheduler import CosineAnnealingLR, LinearLR, SequentialLR
 
 from pathlib import Path
 
@@ -64,12 +64,15 @@ def main(config_yaml: str):
         weight_decay=cfg.weight_decay
     )
 
-    # create simple scheduler - todo parameterize
-    scheduler = CosineAnnealingLR(
+    # tone down the LR at first and then switch to our main scheduler 
+    warmup = LinearLR(optimizer, start_factor=0.1, total_iters=5000)
+
+    main_scheduler = CosineAnnealingLR(
         optimizer,
-        T_max=100000,  # steps to decay
+        T_max=150000,  # steps to decay
         eta_min=cfg.learning_rate * 0.1
     )
+    scheduler = SequentialLR(optimizer, [warmup, main_scheduler], milestones=[50000])
 
     # create text generator
     gen_f = lambda m: generate_text(m, encoding, "The quick brown fox jumps over the")
