@@ -204,16 +204,18 @@ class GPT2Model(nn.Module):
         
         print(f"Model parameters saved to {file_path}")
         
-    def load_parameters(self, file_path: str, mod_prefix='_orig_mod.', map_location=None):
+    def load_parameters(self, file_path: str, model_key: str = None, mod_prefix='_orig_mod.', map_location=None):
         """
         Loads model parameters (state_dict) from a specified file path.
 
         Args:
             file_path (str): The path to the file containing the state_dict.
+            model_key (str): an optional key for the model_state_dict
             remove_prefix (str): prefix to remove (often created by model.compile)
         """
 
         state_dict = torch.load(file_path, map_location=map_location)
+        if model_key: state_dict = state_dict[model_key]
         has_prefix = any(k.startswith(mod_prefix) for k in state_dict.keys())
 
         if has_prefix:

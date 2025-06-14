@@ -18,6 +18,11 @@ dependencies = [
     "torchvision>=0.21.0.dev",
     "pytorch-triton>=3.3.0.dev",
     "wandb>=0.20.1",
+    "jupyter>=1.1.1",
+    "tensorflow>=2.19.0",
+    "matplotlib>=3.10.3",
+    "seaborn>=0.13.2",
+    "evaluate>=0.4.3",
 ]
 
 [tool.uv.sources]
