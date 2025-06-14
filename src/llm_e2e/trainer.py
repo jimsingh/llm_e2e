@@ -19,10 +19,16 @@ class TrainerState:
     epoch: int = 0
     best_val_loss: float = float('inf')
     running_loss: float = 0.0
+    gradient_norms: list = field(default_factory=list) 
     model_state_dict: dict = field(default_factory=dict)
     optimizer_state_dict: dict = field(default_factory=dict)
     config: dict = field(default_factory=dict)
     
+    @property
+    def avg_gradient_norm(self) -> float:
+        if len(self.gradient_norms) == 0: return 0
+        return sum(self.gradient_norms) / len(self.gradient_norms)
+
     def to_dict(self):
         """convert state to dictionary for checkpointing"""
         return {
@@ -152,6 +158,7 @@ class GPT2Trainer:
             # periodic evaluation
             if (i + 1) % self.cfg.eval_interval == 0:
                 self._evaluate_and_checkpoint(epoch, i, text_generator)
+                self.state.gradient_norms.clear()
 
             if (i + 1) % self.cfg.log_interval == 0:
                 avg_loss = self.state.running_loss / self.cfg.log_interval
@@ -169,6 +176,9 @@ class GPT2Trainer:
         self.optimizer.zero_grad()
         logits, loss = self.model(X, Y)
         loss.backward()
+
+        self.state.gradient_norms.append(self._gradient_norm())
+
         self.optimizer.step()
         
         return loss
@@ -182,6 +192,7 @@ class GPT2Trainer:
             'train_loss': losses['train'],
             'val_loss': losses['val'],
             'step': self.state.step,
+            'gradient_sum': self.state.avg_gradient_norm,
             'epoch': epoch + 1
         }
         
@@ -227,7 +238,19 @@ class GPT2Trainer:
         
         self.model.train()
         return losses.mean().item()
-    
+   
+    def _gradient_norm(self):
+        """return calculate gradient norm"""
+        p = self.model.parameters()
+
+        total_norm = sum(
+            p.grad.data.norm(2).item() ** 2  # L2 norm squared for each parameter
+            for p in self.model.parameters()      # iterate through all parameters
+            if p.grad is not None           # only parameters with gradients
+        ) ** 0.5                            # square root of the sum = total L2 norm
+
+        return total_norm
+         
     def save_checkpoint(self, filepath: str):
         """save training checkpoint with robust error handling"""
         # ensure directory exists
