@@ -32,9 +32,11 @@ I pre-trained a 33.6M parameter GPT-2 from scratch using a curated Wikipedia + B
 
 The validation loss chart reveals three distinct phases:
 
-1. **High Learning Rate Phase** (LR=0.009, Steps 0-100k): Rapid initial descent from ~7.4 to ~7.0
-2. **Manual Intervention** (LR=0.0003, Steps 100k-200k): 30x learning rate reduction to prevent training collapse
+1. **High Learning Rate Phase** (LR=0.009, Steps 0-100k): Rapid initial descent from ~9.4 to ~7.0
+2. **Manual Intervention** (LR=0.001, Steps 100k-200k): cut learning rate by 90% to stabalize training
 3. **Cosine Annealing** (Steps 200k-370k): Smooth convergence to best loss of 3.6432 at step 310,811
+
+The chart also shows two other attemps, one with too high a learning rate (gradients explode) and a too low learning rate with a fast initial decent, but very slow improvement afterwards.
 
 **Training Duration**: Approximately 5 hours for 370k steps on a single GPU (~1,200 steps/minute)
 
@@ -42,25 +44,25 @@ The validation loss chart reveals three distinct phases:
 
 <img src="assets/gradient_sum.png" alt="Gradient Sum" width="600"/>
 
-The monotonically increasing gradient magnitudes (0.48→0.54) throughout training indicate substantial learning headroom remains. This steady growth in gradient norms, even as validation loss improved, demonstrates the model was still finding meaningful parameter updates and exploring productive regions of the loss landscape. With 170k steps of cosine annealing completed, the persistent gradient signal suggests extended training would likely yield further improvements.
+The monotonically increasing gradient magnitude (0.48→0.54) indicates headroom remains. This steady growth in gradient norms, even as validation loss improved, demonstrates the model was still finding meaningful parameter updates and exploring productive regions. With 170k steps of cosine annealing completed, the healthy gradient signal suggests extended training would likely yield further improvements. Perhaps into the 3.5-3.6 range.
 
 ### Language Acquisition
 
-Monitoring the model's completions of "The quick brown fox jumps over the..." provides insights into its linguistic development:
+Monitoring the model's completions of "The quick brown fox jumps over the..." shows progress of linguistic development:
 
-**Step 197k** (Syntactic Chaos):
+**Step 197k** (syntax, but still complete nonsense):
 "...carpet and proceeds to train him for the skunks last business"
 
-**Step 227k** (Action Sequence Learning):
+**Step 227k** (an action sequence):
 "...window after crossing a downhill rock indoors a kick blob"
 
-**Step 289k** (Complex Grammar, Surreal Semantics):
+**Step 289k** (complex grammar, surealism):
 "...ladder flipping across the roof and the fans throw their feet against the ground killing themselves"
 
-**Step 273k** (Brevity Emerges):
+**Step 273k** (brevity - model knows when to stop!):
 "...wire"
 
-The progression demonstrates a clear pattern: syntactic structure → narrative patterns → length control. The model mastered grammatical rules before semantic coherence—characteristic of pure autoregressive training without grounding mechanisms.
+The progression has a clear pattern: structure -> narrative patterns -> length control. The model mastered grammatical rules before semantic coherence. This is characteristic of pure autoregressive pre-training without grounding.
 
 ### Comparison with GPT-2 124M
 
