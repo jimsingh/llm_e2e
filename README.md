@@ -1,6 +1,6 @@
 # LLM End-to-End: An Experimentation and Learning Framework for Decoder-Style Language Models
 
-# Abstract
+## Abstract
 
 Large language models (LLMs) have become increasingly accessible and put into production across diverse applications. While the adaptability of modern pretrained models is remarkable, it is crucial to understand and debug the fundamentals of how these models work to apply them effectively. This project is a complete implementation and instrumentation framework for decoder-style language models, with a focus on the well-understood GPT-2 architecture [1]. The key components are modularized to enable systematic exploration of model behavior under different architectural and training hyperparameters. Through the extensibility of each component, the design serves as both an educational resource and a platform for conducting experiments on autoregressive language modeling. As a demonstration, I pre-train my own GPT-2 model from scratch, extract and visualize attention weights to highlight how the model interprets patterns of text, and show how the model can be aligned with human preferences.
 
@@ -66,7 +66,7 @@ The progression has a clear pattern: structure -> narrative patterns -> length c
 
 ### Comparison with GPT-2 124M
 
-For context, here are GPT-2 124M's completions of the same prompt:
+I downloaded OpenAI's open sourced weights for GPT2 124M. Although the model architectures are very similar, there  For context, here are GPT-2 124M's completions of the same prompt:
 
 "...curb. It's ready to go. I glance around for sinkholes..."
 "...fence."
@@ -90,6 +90,44 @@ The [visualization notebook](notebooks/05_visualize_attention.ipynb) instruments
 
 ![Attention Patterns for the second to last layer](assets/attention_gpt2_774M_layer11.png)
 *Attention patterns in the second-to-last layer. The model correctly attends to 'brown suitcase' when generating 'a larger', as shown by the highlighted rows for 'a' and 'larger'.*
+
+## Loading OpenAI's Pretrained Weights
+
+To validate my implementation, I loaded OpenAI's pretrained GPT-2 124M weights into my model architecture. This required careful weight manipulation to account for minor difference between implementations.
+
+- OpenAI GPT2 uses a **Fused QKV matrix** while my model uses separate Q, K, V matrices, which is a more direct interpretation of the design from Attention is All You need. I acknowledge that the fused matrix implementation may be more performance.
+- Transpose all weights to convert from TensorFlow's format to PyTorch
+- Added QKV biases to my model. (I originally omitted these, but added later for compatability)
+- Tediously munge various layer names to align naming conventions. OpenAI used fairly terse (but standard) naming, but I choose to be a bit more descriptive. 
+
+### Weight Transformation Process
+
+The [weight loading notebook](notebooks/04_load_pretrained_weights.ipynb) handles the conversion:
+
+```python
+# Downloads model-124M from OpenAI's released checkpoints
+download_gpt2_model(model_size='124M', models_dir='models')
+
+...
+
+# OpenAI uses shape [768, 2304] where 2304 = 768 * 3 (Q, K, V)
+qkv = loaded_weights[f'model/h{i}/attn/c_attn/w']
+q, k, v = qkv.split(n_embed, dim=1)
+
+# Map to separate parameters in my model
+state_dict[f'h.{i}.attn.q_proj.weight'] = q.T
+state_dict[f'h.{i}.attn.k_proj.weight'] = k.T  
+state_dict[f'h.{i}.attn.v_proj.weight'] = v.T
+```
+
+### Generate text using loaded OpenAI weights
+generate_text(m_gpt2, enc, "The gold trophy would not fit in the brown suitcase because it was too",
+              max_new_tokens=10, temperature=0.8)
+
+Output: "big, so it went into a box"
+
+It took several tries to get weights loaded and for the model produces coherent completions. But, this confirmed successful weight transfer despite the architectural differences. 
+
 
 # Code Pointers
 
