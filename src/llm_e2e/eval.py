@@ -53,7 +53,7 @@ class PerplexityEvaluator:
         text = "".join(char for char in text if self.is_allowed_char(char))
         return text
 
-    def evaluate(self, dataset_name: str, split: str = "test", max_samples: int | None = None, streaming: bool = False) -> dict:
+    def evaluate(self, dataset_name: str, split: str = "test", max_samples: int = None, streaming: bool = False) -> dict:
         """evaluate perplexity on a dataset, document by document."""
         print(f"loading dataset: {dataset_name} (split={split}, streaming={streaming})")
         dataset = self._load_dataset(dataset_name, split, streaming)
@@ -128,7 +128,7 @@ class PerplexityEvaluator:
             dataset = load_dataset(path, config_name, split=split, streaming=streaming, trust_remote_code=True)
         else:
             dataset = load_dataset(dataset_name, split=split, streaming=streaming, trust_remote_code=True)
-        return dataset.shuffle(seed=1234, buffer_size=100_000)
+        return dataset.shuffle(seed=1234)
 
     def _iterate_texts(self, dataset) -> Iterator[str]:
         """
@@ -189,7 +189,9 @@ class PerplexityEvaluator:
         """calculates and returns the final evaluation metrics"""
         perplexity = avg_loss = float('inf')
         if total_tokens > 0:
-            perplexity = torch.exp(torch.tensor(total_loss / total_tokens)).item()
+            import math
+            #perplexity = torch.exp(torch.tensor(total_loss / total_tokens)).item()
+            perplexity = math.exp(total_loss / total_tokens)
             avg_loss = total_loss / total_tokens
 
         return {
@@ -223,7 +225,9 @@ def run_eval(args, tasks_to_run):
     results = {}
     for task_name, task_config in tasks_to_run.items():
         print(f"\n{'='*20} {task_name.upper()} {'='*20}")
-        results[task_name] = evaluator.evaluate(**task_config)
+        current_task_config = task_config.copy()
+        current_task_config['max_samples'] = args.max_samples
+        results[task_name] = evaluator.evaluate(**current_task_config)
 
     print_results(results)
 
@@ -248,14 +252,14 @@ def main():
     parser.add_argument('--model', default='models/llm_e2e/gpt2_33M_cleancorpus/hahrukhx01_wikipedia-bookscorpus-en-preprocessed.33633024.pth', help='path to model checkpoint')
     parser.add_argument('--config', default='config/gpt2_bert_corpus_gpu.yaml', help='path to config file')
     parser.add_argument('--tasks', nargs='*', help='tasks to run (training-corpus, wikitext-103, c4, simple-wikipedia)', required=True)
-    parser.add_argument('--max-samples', type=int, default=100, help='maximum samples for custom dataset or config default')
+    parser.add_argument('--max-samples', type=int, default=1000, help='maximum samples for custom dataset or config default')
     parser.add_argument('--debug', action='store_true', help='enable debug mode')
     args = parser.parse_args()
 
     all_tasks = {
-        'training-corpus': {'dataset_name': 'shahrukhx01/wikipedia-bookscorpus-en-preprocessed', 'split': 'train', 'max_samples': 1000, 'streaming': True},
-        'wikitext-103': {'dataset_name': 'wikitext:wikitext-103-v1', 'split': 'test', 'max_samples': 1000},
-        'simple-wikipedia': {'dataset_name': 'wikimedia/wikipedia:20231101.simple', 'split': 'train', 'max_samples': 1000, 'streaming': True},
+        'training-corpus': {'dataset_name': 'shahrukhx01/wikipedia-bookscorpus-en-preprocessed', 'split': 'train', 'streaming': True},
+        'wikitext-103': {'dataset_name': 'wikitext:wikitext-103-v1', 'split': 'test'},
+        'simple-wikipedia': {'dataset_name': 'wikimedia/wikipedia:20231101.simple', 'split': 'train', 'streaming': True},
         'c4': {'dataset_name': 'c4:en', 'split': 'train', 'max_samples': 50, 'streaming': True}
     }
     tasks_to_run = {name: all_tasks[name] for name in args.tasks if name in all_tasks}
