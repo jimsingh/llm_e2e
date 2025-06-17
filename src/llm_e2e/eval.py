@@ -1,4 +1,3 @@
-# uv pip install datasets transformers tiktoken torch
 
 import argparse
 import os
@@ -11,7 +10,12 @@ import tiktoken
 from datasets import load_dataset
 
 from llm_e2e import GPT2Config, GPT2Model
-
+import argparse
+import os
+import sys
+from collections import Counter  # Add this line
+from collections.abc import Iterator
+from dataclasses import dataclass
 
 @dataclass
 class EvalConfig:
@@ -20,7 +24,7 @@ class EvalConfig:
     max_seq_len: int = 128
     log_interval: int = 100
     debug: bool = False
-
+    text_chunk_target_size: int = 300 # add this line
 
 class PerplexityEvaluator:
     """evaluates perplexity on text datasets"""
@@ -31,42 +35,39 @@ class PerplexityEvaluator:
         self.cfg = config
         self.model.eval()
         self.model.to(config.device)
-        self.allowed_punctuation = set("!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~")
+
+        # limit punctuation and letters to what we have in training
+        self.allowed_punctuation = set("""! . , ? ' " : ; -`.""")
+        self._allowed_chars = {chr(c) for c in range(ord('a'), ord('z') + 1)}
+        self._allowed_chars.update(chr(c) for c in range(ord('0'), ord('9') + 1))
+        self._allowed_chars.update(self.allowed_punctuation)
+        self._allowed_chars.add(' ')
+        self.is_allowed_char = lambda c: c in self._allowed_chars
 
     def _preprocess_text(self, text: str) -> str:
         """
-        preprocesses text to match the training corpus format by converting
-        to lowercase and removing punctuation not in the allowed set.
+        preprocesses text to match training corpus by converting
+        to lowercase and removing punctuation.
         """
-        # convert to lowercase
         text = text.lower()
-        # filter out punctuation not present in the training corpus
-        text = "".join(char for char in text if char.isalnum() or char.isspace() or char in self.allowed_punctuation)
+        text = "".join(char for char in text if self.is_allowed_char(char))
         return text
-
 
     def evaluate(self, dataset_name: str, split: str = "test", max_samples: int | None = None, streaming: bool = False) -> dict:
         """evaluate perplexity on a dataset, document by document."""
         print(f"loading dataset: {dataset_name} (split={split}, streaming={streaming})")
-        try:
-            dataset = self._load_dataset(dataset_name, split, streaming)
-            print("dataset loaded successfully")
-        except Exception as e:
-            print(f"error loading dataset: {e}", file=sys.stderr)
-            return {"error": str(e)}
+        dataset = self._load_dataset(dataset_name, split, streaming)
 
         total_loss = 0.0
         total_tokens = 0
         samples_processed = 0
         skipped_samples = 0
 
-        print(f"starting evaluation (max_samples={max_samples or 'all'})")
-        print("-" * 50)
+        print(f"evalating (max_samples={max_samples or 'all'})")
 
         with torch.no_grad():
             for i, text in enumerate(self._iterate_texts(dataset)):
                 if max_samples and samples_processed >= max_samples:
-                    print(f"\nreached max samples limit ({max_samples})")
                     break
                 
                 if len(text.strip()) < 10:
@@ -75,10 +76,8 @@ class PerplexityEvaluator:
                 
                 samples_processed += 1
                 
-                # tokenize the entire document
                 document_tokens = self.tokenizer.encode(text, allowed_special="all")
                 
-                # process the document in chunks
                 for chunk_tokens in self._chunk_document(document_tokens):
                     
                     if len(chunk_tokens) < 2:
@@ -97,8 +96,7 @@ class PerplexityEvaluator:
                 if (samples_processed % self.cfg.log_interval == 0) and (total_tokens > 0):
                     self._print_progress(i, samples_processed, total_tokens, total_loss, skipped_samples)
 
-        print("-" * 50)
-        print(f"evaluation complete: {samples_processed} documents, {skipped_samples} skipped")
+        print(f"eval complete: {samples_processed} documents, {skipped_samples} skipped")
 
         return self._calculate_final_metrics(total_loss, total_tokens, samples_processed, skipped_samples)
 
@@ -111,43 +109,77 @@ class PerplexityEvaluator:
                 yield chunk
 
     def _compute_loss(self, input_ids: torch.Tensor) -> tuple[float, int]:
-        """
-        computes the average cross-entropy loss for a given sequence.
-        """
+        """ computes the average cross-entropy loss for the sequence. """
         inputs = input_ids[:, :-1]
-        targets = input_ids[:, 1:]
+        targets = input_ids[:, 1:] # standard next token prediction
         num_predictions = targets.shape[1]
 
         if num_predictions == 0:
             return 0.0, 0
 
+        # model will calculate loss
         _, loss = self.model(inputs, targets)
         return loss.item(), num_predictions
 
     def _load_dataset(self, dataset_name: str, split: str, streaming: bool):
-        """load dataset with appropriate configuration"""
+        """use hugging face data loaders """
         if ":" in dataset_name:
             path, config_name = dataset_name.split(":", 1)
-            return load_dataset(path, config_name, split=split, streaming=streaming, trust_remote_code=True)
-        return load_dataset(dataset_name, split=split, streaming=streaming, trust_remote_code=True)
+            dataset = load_dataset(path, config_name, split=split, streaming=streaming, trust_remote_code=True)
+        else:
+            dataset = load_dataset(dataset_name, split=split, streaming=streaming, trust_remote_code=True)
+        return dataset.shuffle(seed=1234, buffer_size=100_000)
 
     def _iterate_texts(self, dataset) -> Iterator[str]:
-        """extract and preprocess text from dataset examples."""
+        """
+        Pulls data from the dataset in a consistent way so that datasets with long input sequences are split up
+        so that they match the typical token lengths we trained on.
+        """
+        text_buffer = []
+        current_chunk_size = 0
+        target_size = self.cfg.text_chunk_target_size
+
         for example in dataset:
-            text = example.get('highlights', example.get('sentence', example.get('text', example.get('content', ''))))
-            if text:
-                processed_text = self._preprocess_text(text)
-                if '<unk>' not in processed_text:
-                    yield processed_text
+            # this chain of gets accounts for different text keys in datasets
+            raw_text = example.get('highlights',
+                                   example.get('sentence',
+                                               example.get('text',
+                                                        example.get('content', ''))))
+            if not raw_text:
+                continue
+
+            # split by paragraph to handle long articles gracefully
+            paragraphs = raw_text.split('\n\n')
+
+            for paragraph in paragraphs:
+                # remove funny punctuation and lowercase text
+                processed_paragraph = self._preprocess_text(paragraph.strip())
+
+                # skip empty or very short paragraphs
+                if len(processed_paragraph.split()) < 10:
+                    continue
+
+                # add the new paragraph to the buffer
+                text_buffer.append(processed_paragraph)
+                current_chunk_size += len(processed_paragraph)
+
+                # if the buffer is full, yield the sample
+                if current_chunk_size >= target_size:
+                    yield " ".join(text_buffer)
+                    text_buffer = []
+                    current_chunk_size = 0
+
+        # after the loop finishes, yield any remaining text in the buffer
+        if text_buffer:
+            yield " ".join(text_buffer)
 
     def _print_debug_info(self, sample_num, text, tokens, n_predictions, loss):
-        """prints information for a single sample in debug mode"""
+        """output a single sample for debugging"""
         print(f"\n[debug] sample {sample_num}:")
-        print(f"  text preview: {text[:100]}...")
+        print(f"  text preview: {text[:1000]}...")
         print(f"  total tokens: {tokens.shape[1]}, predictions: {n_predictions}, loss: {loss:.4f}")
 
     def _print_progress(self, i, samples, total_tokens, total_loss, skipped):
-        """prints the current evaluation progress"""
         current_ppl = torch.exp(torch.tensor(total_loss / total_tokens)).item()
         avg_tokens = total_tokens / samples
         print(f"[{i+1:5d}] documents: {samples:4d}, ppl: {current_ppl:7.2f}, "
@@ -155,23 +187,21 @@ class PerplexityEvaluator:
 
     def _calculate_final_metrics(self, total_loss, total_tokens, samples, skipped):
         """calculates and returns the final evaluation metrics"""
-        if total_tokens == 0:
-            return {"perplexity": float('inf'), "loss": float('inf'), "samples": 0, "tokens": 0, "skipped": skipped}
+        perplexity = avg_loss = float('inf')
+        if total_tokens > 0:
+            perplexity = torch.exp(torch.tensor(total_loss / total_tokens)).item()
+            avg_loss = total_loss / total_tokens
 
-        perplexity = torch.exp(torch.tensor(total_loss / total_tokens)).item()
-        avg_loss = total_loss / total_tokens
         return {
             "perplexity": perplexity,
             "loss": avg_loss,
             "samples": samples,
             "tokens": total_tokens,
             "skipped": skipped,
-            "avg_tokens_per_sample": total_tokens / max(samples, 1)
+            "avg_tokens_per_sample": total_tokens / samples
         }
 
-
-def run_evaluation(args, tasks_to_run):
-    print("=== model evaluation ===")
+def run_eval(args, tasks_to_run):
     print(f"model: {args.model}")
     print(f"config: {args.config}")
 
@@ -184,27 +214,6 @@ def run_evaluation(args, tasks_to_run):
 
     print(f"context length: {cfg.context_length}")
     print(f"device: {eval_cfg.device}")
-    if args.debug:
-        print("debug mode: enabled")
-
-    # if no tasks are provided, fall back to the dataset specified in the config
-    if not tasks_to_run:
-        if not hasattr(cfg, 'dataset_path'):
-            raise ValueError("no dataset specified in config and no tasks provided via command line.")
-        
-        dataset_name = cfg.dataset_path
-        if hasattr(cfg, 'dataset_name') and cfg.dataset_name and cfg.dataset_name != 'default':
-            dataset_name = f"{dataset_name}:{cfg.dataset_name}"
-        
-        print(f"using dataset from config: {dataset_name}")
-        tasks_to_run = {
-            'config_dataset': {
-                'dataset_name': dataset_name,
-                'split': getattr(cfg, 'dataset_split', 'train'),
-                'max_samples': args.max_samples,
-                'streaming': True
-            }
-        }
 
     tokenizer = tiktoken.get_encoding(cfg.encoding_name)
     model = GPT2Model(cfg)
@@ -218,12 +227,10 @@ def run_evaluation(args, tasks_to_run):
 
     print_results(results)
 
-
 def print_results(results: dict):
     """pretty print evaluation results"""
-    print("\n" + "="*60)
-    print("final evaluation results")
-    print("="*60)
+    print("\neval results:")
+    print("\n")
     for task, metrics in results.items():
         print(f"\n[{task.upper()}]")
         print("-" * (len(task) + 2))
@@ -232,40 +239,28 @@ def print_results(results: dict):
                 print(f"  {key}: {value:.3f}")
             else:
                 print(f"  {key}: {value}")
-    print("\n" + "="*60)
+    print("\n")
 
 
 def main():
     """parses arguments and runs the evaluation"""
     parser = argparse.ArgumentParser(description='evaluate model perplexity.')
-    parser.add_argument('--model', default='model.pth', help='path to model checkpoint')
+    parser.add_argument('--model', default='models/llm_e2e/gpt2_33M_cleancorpus/hahrukhx01_wikipedia-bookscorpus-en-preprocessed.33633024.pth', help='path to model checkpoint')
     parser.add_argument('--config', default='config/gpt2_bert_corpus_gpu.yaml', help='path to config file')
-    parser.add_argument('--dataset', help='evaluate a custom dataset (e.g., "openwebtext" or "c4:en")')
-    parser.add_argument('--tasks', nargs='*', help='predefined tasks to run (e.g., wikitext-103, ptb, c4, simple-wikipedia)')
+    parser.add_argument('--tasks', nargs='*', help='tasks to run (training-corpus, wikitext-103, c4, simple-wikipedia)', required=True)
     parser.add_argument('--max-samples', type=int, default=100, help='maximum samples for custom dataset or config default')
     parser.add_argument('--debug', action='store_true', help='enable debug mode')
     args = parser.parse_args()
 
-    tasks_to_run = {}
-    if args.dataset:
-        tasks_to_run['custom'] = {'dataset_name': args.dataset, 'max_samples': args.max_samples, 'streaming': True}
-    elif args.tasks:
-        all_tasks = {
-            'training-corpus': {'dataset_name': 'shahrukhx01/wikipedia-bookscorpus-en-preprocessed', 'split': 'train', 'max_samples': 1000, 'streaming': True},
-            'wikitext-103': {'dataset_name': 'wikitext:wikitext-103-v1', 'split': 'test', 'max_samples': 1000},
-            'simple-wikipedia': {'dataset_name': 'wikimedia/wikipedia:20231101.simple', 'split': 'train', 'max_samples': 1000, 'streaming': True},
-            #'cnn_dailymail': {'dataset_name': 'cnn_dailymail:3.0.0', 'split': 'test', 'max_samples': 1000},
-            'cnn_dailymail': {'dataset_name': 'abisee/cnn_dailymail:3.0.0', 'split': 'test', 'max_samples': 1000},
-            'c4': {'dataset_name': 'c4:en', 'split': 'train', 'max_samples': 50, 'streaming': True}
-        }
-        tasks_to_run = {name: all_tasks[name] for name in args.tasks if name in all_tasks}
+    all_tasks = {
+        'training-corpus': {'dataset_name': 'shahrukhx01/wikipedia-bookscorpus-en-preprocessed', 'split': 'train', 'max_samples': 1000, 'streaming': True},
+        'wikitext-103': {'dataset_name': 'wikitext:wikitext-103-v1', 'split': 'test', 'max_samples': 1000},
+        'simple-wikipedia': {'dataset_name': 'wikimedia/wikipedia:20231101.simple', 'split': 'train', 'max_samples': 1000, 'streaming': True},
+        'c4': {'dataset_name': 'c4:en', 'split': 'train', 'max_samples': 50, 'streaming': True}
+    }
+    tasks_to_run = {name: all_tasks[name] for name in args.tasks if name in all_tasks}
 
-    try:
-        run_evaluation(args, tasks_to_run)
-    except (ValueError, FileNotFoundError) as e:
-        print(f"\nerror: {e}", file=sys.stderr)
-        sys.exit(1)
-
+    run_eval(args, tasks_to_run)
 
 if __name__ == "__main__":
     main()
