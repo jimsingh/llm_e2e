@@ -15,7 +15,7 @@ model:
 
 training:
     num_epochs: 1
-    learning_rate: 0.003
+    learning_rate: 0.009
     batch_size: 108 
     log_interval: 300
     eval_iters: 30
