@@ -65,14 +65,15 @@ def main(config_yaml: str):
     )
 
     # tone down the LR at first and then switch to our main scheduler 
-    warmup = LinearLR(optimizer, start_factor=0.1, total_iters=5000)
+    warmup = LinearLR(optimizer, start_factor=0.1, total_iters=cfg.warmup_steps)
+    annealing_steps = cfg.total_steps - cfg.warmup_steps
 
     main_scheduler = CosineAnnealingLR(
         optimizer,
-        T_max=150000,  # steps to decay
+        T_max=annealing_steps,  # steps to decay
         eta_min=cfg.learning_rate * 0.1
     )
-    scheduler = SequentialLR(optimizer, [warmup, main_scheduler], milestones=[50000])
+    scheduler = SequentialLR(optimizer, [warmup, main_scheduler], milestones=[cfg.warmup_steps])
 
     # create text generator
     gen_f = lambda m: generate_text(m, encoding, "The quick brown fox jumps over the")

@@ -16,11 +16,11 @@ model:
 training:
     num_epochs: 1
     learning_rate: 0.003
-    batch_size: 32 
+    batch_size: 108 
     log_interval: 300
     eval_iters: 30
-    eval_interval: 1000
-    save_interval: 1000
+    eval_interval: 1500
+    save_interval: 1500
 
 logging:
   wandb_log: True

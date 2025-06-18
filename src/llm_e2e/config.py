@@ -56,7 +56,9 @@ class GPT2Config:
     eval_interval: int                  = 1_00
     save_interval: int                  = 10_000
     save_filename: str                  = field(init = False)
-    
+    warmup_steps: int                   = 10_100
+    total_steps: int                    = 400_000
+
     # System
     device: str                         = 'cuda'
     compile_model: bool                 = True

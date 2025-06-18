@@ -32,6 +32,23 @@ class StreamingDatasetGenerator:
             streaming=True
         )
         
+        # initialize allowed characters for preprocessing, similar to eval.py
+        allowed_punctuation = set("""! . , ? ' " : ; -`.""")
+        self._allowed_chars = {chr(c) for c in range(ord('a'), ord('z') + 1)}
+        self._allowed_chars.update(chr(c) for c in range(ord('0'), ord('9') + 1))
+        self._allowed_chars.update(allowed_punctuation)
+        self._allowed_chars.add(' ')
+        self.is_allowed_char = lambda c: c in self._allowed_chars
+        
+    def _preprocess_text(self, text: str) -> str:
+        """
+        Preprocesses text to match training corpus by converting
+        to lowercase and removing disallowed characters.
+        """
+        text = text.lower()
+        text = "".join(char for char in text if self.is_allowed_char(char))
+        return text
+
     def __iter__(self):
         """Reset for new epoch and return self as iterator."""
         self.counter += 1
@@ -68,9 +85,12 @@ class StreamingDatasetGenerator:
             txt = self._get_text(doc)
             if not self._should_include_doc(txt):
                 continue
-                
+
+            # Preprocess the text before tokenization
+            processed_txt = self._preprocess_text(txt)
+
             # text -> token ids
-            tokens = self.encoding.encode_ordinary(txt)
+            tokens = self.encoding.encode_ordinary(processed_txt)
             tokens.append(self.encoding.eot_token)
             all_tokens.extend(tokens)
             
