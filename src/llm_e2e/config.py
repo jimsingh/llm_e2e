@@ -47,7 +47,7 @@ class GPT2Config:
     beta2: float                        = 0.95
     grad_clip: float                    = 1.0
     warmup_steps: int                   = 2_000
-    max_steps: int                      = 600_000
+    max_steps: int                    = 400_000
     
     # Training setup
     batch_size: int                     = 8
@@ -56,8 +56,6 @@ class GPT2Config:
     eval_interval: int                  = 1_00
     save_interval: int                  = 10_000
     save_filename: str                  = field(init = False)
-    warmup_steps: int                   = 10_000
-    total_steps: int                    = 400_000
 
     # System
     device: str                         = 'cuda'

@@ -161,7 +161,6 @@ class GPT2Trainer:
             if (i + 1) % self.cfg.eval_interval == 0:
                 self._evaluate_and_checkpoint(epoch, i, text_generator)
                 self.state.gradient_norms.clear()
-                if self.scheduler: self.scheduler.step()
 
             if (i + 1) % self.cfg.log_interval == 0:
                 avg_loss = self.state.running_loss / self.cfg.log_interval
@@ -181,10 +180,19 @@ class GPT2Trainer:
         logits, loss = self.model(X, Y)
         loss.backward()
 
+        # clip gradients if they get beyond our limit
+        grad_norm = self._gradient_norm()
+        if self.cfg.grad_clip > 0:
+            torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.cfg.grad_clip)
+
         self.state.gradient_norms.append(self._gradient_norm())
 
         self.optimizer.step()
-        
+
+        # optimizer and scheduler .step are called with the same frequency
+        if self.scheduler:
+            self.scheduler.step()
+
         return loss
     
     def _evaluate_and_checkpoint(self, epoch: int, batch_idx: int, text_generator):

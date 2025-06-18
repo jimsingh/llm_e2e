@@ -30,6 +30,19 @@ def setup_cuda(cfg: GPT2Config):
     else:
         print("tensor cores not supported on this gpu.")
 
+def create_scheduler(cfg: GPT2Config, optimizer):
+    warmup = LinearLR(optimizer, start_factor=0.1, total_iters=cfg.warmup_steps)
+
+    annealing_steps = cfg.max_steps - cfg.warmup_steps
+    main_scheduler = CosineAnnealingLR(
+        optimizer,
+        T_max=annealing_steps,  # steps to decay
+        eta_min=cfg.learning_rate * 0.1
+    )
+
+    print(f"scheduler: warmup_steps={cfg.warmup_steps}, anealing_steps={annealing_steps}, total_steps={cfg.max_steps}")
+    scheduler = SequentialLR(optimizer, [warmup, main_scheduler], milestones=[cfg.warmup_steps])
+    return scheduler
 
 def main(config_yaml: str):
     # configuration
@@ -65,15 +78,8 @@ def main(config_yaml: str):
     )
 
     # tone down the LR at first and then switch to our main scheduler 
-    warmup = LinearLR(optimizer, start_factor=0.1, total_iters=cfg.warmup_steps)
-    annealing_steps = cfg.total_steps - cfg.warmup_steps
+    scheduler = create_scheduler(cfg, optimizer)
 
-    main_scheduler = CosineAnnealingLR(
-        optimizer,
-        T_max=annealing_steps,  # steps to decay
-        eta_min=cfg.learning_rate * 0.1
-    )
-    scheduler = SequentialLR(optimizer, [warmup, main_scheduler], milestones=[cfg.warmup_steps])
 
     # create text generator
     gen_f = lambda m: generate_text(m, encoding, "The quick brown fox jumps over the")
