@@ -165,9 +165,10 @@ class GPT2Trainer:
 
             if (i + 1) % self.cfg.log_interval == 0:
                 avg_loss = self.state.running_loss / self.cfg.log_interval
+                current_lr = optimizer.param_groups[0]['lr']
                 self.log(
                     f"[{epoch + 1}/{i + 1:5d}] Running loss: {avg_loss:.3f}",
-                    {'running_loss': avg_loss, 'step': self.state.step}
+                    {'running_loss': avg_loss, 'step': self.state.step, 'lr': current_lr}
                 )
                 self.state.running_loss = 0.0
             
