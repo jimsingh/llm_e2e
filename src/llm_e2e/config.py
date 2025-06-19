@@ -41,13 +41,13 @@ class GPT2Config:
     
     # Training hyperparameters
     num_epochs: int                     = 2
-    learning_rate: float                = 6e-4
+    learning_rate: float                = 7e-4
     weight_decay: float                 = 0.1
     beta1: float                        = 0.9
     beta2: float                        = 0.95
     grad_clip: float                    = 1.0
-    warmup_steps: int                   = 2_000
-    max_steps: int                    = 400_000
+    warmup_steps: int                   = 4_000     # ~1-2% of total steps
+    max_steps: int                      = 400_000
     
     # Training setup
     batch_size: int                     = 8

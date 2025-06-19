@@ -79,7 +79,7 @@ class GPT2Trainer:
     
     def log(self, message: str, metrics: dict = None, commit: bool = True):
         """unified logging method"""
-        print(f"{self.state.step}: {message}")
+        print(f"{self.state.step}: {message}, {metrics}")
         
         # GPU memory logging
         if metrics and metrics.get('log_gpu_memory') and self.device.type == 'cuda':
@@ -166,7 +166,7 @@ class GPT2Trainer:
                 avg_loss = self.state.running_loss / self.cfg.log_interval
                 current_lr = self.optimizer.param_groups[0]['lr']
                 self.log(
-                    f"[{epoch + 1}/{i + 1:5d}] Running loss: {avg_loss:.3f}",
+                    f"[{epoch + 1} {i + 1:5d}] Running loss: {avg_loss:.3f}",
                     {'running_loss': avg_loss, 'step': self.state.step, 'lr': current_lr}
                 )
                 self.state.running_loss = 0.0
