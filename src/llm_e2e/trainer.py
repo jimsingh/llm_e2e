@@ -22,6 +22,7 @@ class TrainerState:
     gradient_norms: list = field(default_factory=list) 
     model_state_dict: dict = field(default_factory=dict)
     optimizer_state_dict: dict = field(default_factory=dict)
+    scheduler_state_dict: dict = field(default_factory=dict)
     config: dict = field(default_factory=dict)
     
     @property
@@ -38,6 +39,7 @@ class TrainerState:
             'running_loss': self.running_loss,
             'model_state_dict': self.model_state_dict,
             'optimizer_state_dict': self.optimizer_state_dict,
+            'scheduler_state_dict': self.scheduler_state_dict,
             'config': self.config
         }
     
@@ -271,7 +273,9 @@ class GPT2Trainer:
         # update state dicts - handle compiled models
         self.state.model_state_dict = self._orig_model.state_dict()
         self.state.optimizer_state_dict = self.optimizer.state_dict()
-        
+        if self.scheduler:
+            self.state.scheduler_state_dict = self.scheduler.state_dict()
+
         # save with atomic write
         tmp_path = f"{filepath}.tmp"
         torch.save(self.state.to_dict(), tmp_path)
@@ -299,6 +303,8 @@ class GPT2Trainer:
         # restore model and optimizer states
         self._orig_model.load_state_dict(self.state.model_state_dict)
         self.optimizer.load_state_dict(self.state.optimizer_state_dict)
+        if self.scheduler:
+            self.scheduler.load_state_dict(self.state.scheduler_state_dict)
         
         self.log(
             f"Loaded checkpoint from {filepath}\n"
