@@ -81,7 +81,7 @@ class GPT2Trainer:
     
     def log(self, message: str, metrics: dict = None, commit: bool = True):
         """unified logging method"""
-        print(f"{self.state.step}: {message}, {metrics}")
+        print(f"{message}, {metrics}")
         
         # GPU memory logging
         if metrics and metrics.get('log_gpu_memory') and self.device.type == 'cuda':
@@ -148,13 +148,18 @@ class GPT2Trainer:
         
         # log epoch start
         self.log(
-            f"\n[Epoch {epoch + 1}/{self.cfg.num_epochs}] "
+            f"\n[Epoch {epoch + 1}/{self.cfg.num_epochs}, max_steps: {self.cfg.max_steps}] "
             f"Started at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
         )
         
         for i, (X, Y) in enumerate(self.train_loader):
+            # Check if next step would exceed max_steps
+            if self.state.step >= self.cfg.max_steps:
+                print(f"reached max steps: {self.cfg.max_steps}, training complete")
+                break
+
             self.state.step += 1
-            
+             
             # train single batch
             loss = self._train_batch(X, Y)
             self.state.running_loss += loss.item()
@@ -172,7 +177,6 @@ class GPT2Trainer:
                     {'running_loss': avg_loss, 'step': self.state.step, 'lr': current_lr}
                 )
                 self.state.running_loss = 0.0
-            
     
     def _train_batch(self, X, Y):
         """process single training batch"""

@@ -40,6 +40,7 @@ def trainer(sample_config, mock_loader, mock_logger):
     """a gpt2trainer instance for testing."""
     model = GPT2Model(sample_config)
     optimizer = torch.optim.AdamW(model.parameters(), lr=sample_config.learning_rate)
+    scheduler = None  # No scheduler for testing
     
     # patch the loader to avoid StopIteration
     with patch('itertools.islice', return_value=mock_loader()):
@@ -47,6 +48,7 @@ def trainer(sample_config, mock_loader, mock_logger):
             cfg=sample_config,
             model=model,
             optimizer=optimizer,
+            scheduler=scheduler,
             train_loader=mock_loader(),
             val_loader=mock_loader(),
             logger=mock_logger
@@ -102,6 +104,7 @@ def test_save_and_load_checkpoint(trainer, tmp_path):
         cfg=trainer.cfg,
         model=GPT2Model(trainer.cfg),
         optimizer=torch.optim.AdamW(trainer.model.parameters(), lr=trainer.cfg.learning_rate),
+        scheduler=None,
         train_loader=trainer.train_loader,
         val_loader=trainer.val_loader,
         logger=MagicMock()
@@ -131,6 +134,7 @@ def test_train_e2e_gradient_updates(small_config, small_loader, mock_logger, tmp
         cfg=small_config,
         model=model,
         optimizer=optimizer,
+        scheduler=None,
         train_loader=small_loader(),
         val_loader=small_loader(),
         logger=mock_logger
@@ -144,3 +148,103 @@ def test_train_e2e_gradient_updates(small_config, small_loader, mock_logger, tmp
     for name, param in trainer.model.named_parameters():
         if param.requires_grad:
             assert not torch.equal(initial_params[name], param), f"parameter {name} was not updated."
+
+
+def test_max_steps_stopping_condition(sample_config, mock_loader, mock_logger, tmp_path):
+    """
+    Test that training stops when max_steps is reached, regardless of epoch completion.
+    """
+    # Configure for max_steps testing
+    sample_config.max_steps = 3  # Stop after 3 steps
+    sample_config.num_epochs = 10  # More epochs than needed
+    sample_config.eval_interval = 5  # Won't trigger evaluation
+    sample_config.log_interval = 1
+    sample_config.save_filename = str(tmp_path / "test_model.pth")
+    
+    model = GPT2Model(sample_config)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=sample_config.learning_rate)
+    
+    trainer = GPT2Trainer(
+        cfg=sample_config,
+        model=model,
+        optimizer=optimizer,
+        scheduler=None,
+        train_loader=mock_loader(),
+        val_loader=mock_loader(),
+        logger=mock_logger
+    )
+    
+    # Record initial step
+    initial_step = trainer.state.step
+    assert initial_step == 0
+    
+    # Run training
+    trainer.train()
+    
+    # Verify that training stopped at max_steps
+    assert trainer.state.step == sample_config.max_steps, f"Expected {sample_config.max_steps} steps, got {trainer.state.step}"
+    
+    # Verify that we didn't complete all epochs (since we stopped early)
+    assert trainer.state.epoch < sample_config.num_epochs, "Should have stopped before completing all epochs"
+
+
+def test_max_steps_with_evaluation_trigger(sample_config, mock_loader, mock_logger, tmp_path):
+    """
+    Test that max_steps stopping works correctly even when evaluation is triggered.
+    """
+    # Configure for testing max_steps with evaluation
+    sample_config.max_steps = 5  # Stop after 5 steps
+    sample_config.num_epochs = 10
+    sample_config.eval_interval = 2  # Will trigger evaluation at step 2 and 4
+    sample_config.log_interval = 1
+    sample_config.save_filename = str(tmp_path / "test_model.pth")
+    
+    model = GPT2Model(sample_config)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=sample_config.learning_rate)
+    
+    trainer = GPT2Trainer(
+        cfg=sample_config,
+        model=model,
+        optimizer=optimizer,
+        scheduler=None,
+        train_loader=mock_loader(),
+        val_loader=mock_loader(),
+        logger=mock_logger
+    )
+    
+    # Run training
+    trainer.train()
+    
+    # Verify that training stopped at max_steps
+    assert trainer.state.step == sample_config.max_steps, f"Expected {sample_config.max_steps} steps, got {trainer.state.step}"
+
+
+def test_max_steps_exact_boundary(sample_config, mock_loader, mock_logger, tmp_path):
+    """
+    Test that max_steps works correctly when set to exactly 1 step.
+    """
+    # Configure for single step training
+    sample_config.max_steps = 1  # Stop after exactly 1 step
+    sample_config.num_epochs = 5
+    sample_config.eval_interval = 10  # Won't trigger evaluation
+    sample_config.log_interval = 1
+    sample_config.save_filename = str(tmp_path / "test_model.pth")
+    
+    model = GPT2Model(sample_config)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=sample_config.learning_rate)
+    
+    trainer = GPT2Trainer(
+        cfg=sample_config,
+        model=model,
+        optimizer=optimizer,
+        scheduler=None,
+        train_loader=mock_loader(),
+        val_loader=mock_loader(),
+        logger=mock_logger
+    )
+    
+    # Run training
+    trainer.train()
+    
+    # Verify that training stopped at exactly 1 step
+    assert trainer.state.step == 1, f"Expected 1 step, got {trainer.state.step}"
