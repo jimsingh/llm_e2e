@@ -1,13 +1,16 @@
 """
 refactored trainer from 03_gpt2_trainer.ipynb
 """
-import torch
 import itertools
+import time
 import json
 import os
+
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
+
+import torch
 
 from llm_e2e import GPT2Config, WandbLogger
 
@@ -24,11 +27,35 @@ class TrainerState:
     optimizer_state_dict: dict = field(default_factory=dict)
     scheduler_state_dict: dict = field(default_factory=dict)
     config: dict = field(default_factory=dict)
-    
+
+    # throughput tracking
+    tokens_processed: int = 0
+    elapsed_time: float = 0.0
+
     @property
     def avg_gradient_norm(self) -> float:
         if len(self.gradient_norms) == 0: return 0
         return sum(self.gradient_norms) / len(self.gradient_norms)
+
+    def update_loss(self, loss: float):
+        self.running_loss += loss
+
+    def get_avg_loss(self, n_batches: int) -> float:
+        return self.running_loss / n_batches if n_batches > 0 else 0.0
+
+    def update_tokens(self, n_tokens: int, elapsed: float):
+        self.tokens_processed += n_tokens
+        self.elapsed_time += elapsed
+
+    @property
+    def throughput(self) -> float:
+        return self.tokens_processed / self.elapsed_time if self.elapsed_time > 0 else 0.0
+
+    def reset_recent(self):
+        self.running_loss = 0.0
+        self.tokens_processed = 0
+        self.elapsed_time = 0.0
+        self.gradient_norms.clear()
 
     def to_dict(self):
         """convert state to dictionary for checkpointing"""
@@ -68,7 +95,8 @@ class GPT2Trainer:
         self.val_loader = val_loader
         self.logger = logger
         self.device = torch.device(cfg.device)
-        
+        self.tokens_per_batch = cfg.batch_size * cfg.context_length
+ 
         # initialize state
         self.state = TrainerState(config=vars(cfg))
         
@@ -161,22 +189,26 @@ class GPT2Trainer:
             self.state.step += 1
              
             # train single batch
+            batch_start_time = time.time()
             loss = self._train_batch(X, Y)
-            self.state.running_loss += loss.item()
-            
+            batch_time = time.time() - batch_start_time
+
+            self.state.update_loss(loss.item())
+            self.state.update_tokens(self.tokens_per_batch, batch_time)
+
             # periodic evaluation
             if (i + 1) % self.cfg.eval_interval == 0:
                 self._evaluate_and_checkpoint(epoch, i, text_generator)
-                self.state.gradient_norms.clear()
 
             if (i + 1) % self.cfg.log_interval == 0:
-                avg_loss = self.state.running_loss / self.cfg.log_interval
+                avg_loss = self.state.get_avg_loss(self.cfg.log_interval)
                 current_lr = self.optimizer.param_groups[0]['lr']
                 self.log(
                     f"[{epoch + 1} {i + 1:5d}] Running loss: {avg_loss:.3f}",
-                    {'running_loss': avg_loss, 'step': self.state.step, 'lr': current_lr}
+                    {'step': self.state.step, 'lr': current_lr, 
+                     'running_loss': avg_loss, 't/s': self.state.throughput}
                 )
-                self.state.running_loss = 0.0
+                self.state.reset_recent()
     
     def _train_batch(self, X, Y):
         """process single training batch"""
@@ -187,7 +219,6 @@ class GPT2Trainer:
         loss.backward()
 
         # clip gradients if they get beyond our limit
-        grad_norm = self._gradient_norm()
         if self.cfg.grad_clip > 0:
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.cfg.grad_clip)
 
@@ -261,6 +292,8 @@ class GPT2Trainer:
         """return calculate gradient norm"""
         p = self.model.parameters()
 
+        # total norm := l2 norm of the concatenated gradient vector
+        # we compute it piece by piece for numeric stability 
         total_norm = sum(
             p.grad.data.norm(2).item() ** 2  # L2 norm squared for each parameter
             for p in self.model.parameters()      # iterate through all parameters
