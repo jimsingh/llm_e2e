@@ -91,13 +91,64 @@ The [visualization notebook](notebooks/05_visualize_attention.ipynb) instruments
 ![Attention Patterns for the second to last layer](assets/attention_gpt2_774M_layer11.png)
 *Attention patterns in the second-to-last layer. The model correctly attends to 'brown suitcase' when generating 'a larger', as shown by the highlighted rows for 'a' and 'larger'.*
 
+## Out Of Sample Evaluation
+```bash
+
+python -m llm_e1e.eval --task simple-wikipedia training-corpus c4 --max-samples 1000
+```
+
+I compared model perplexity based on next token prediction against the training corpus, simple-wikipedia, and c4 (common crawl). 
+
+```bash
+[BERT-CORPUS]
+-----------------
+  perplexity: 66.779
+  loss: 4.201
+  samples: 1000
+  
+[C4]
+----
+  perplexity: 5850.555
+  loss: 8.674
+  samples: 1000
+```
+The model performs as expected on text similar to its training data, but performs poorly on out of corpus text including
+simple-wikipedia and c4. Inspecting samples from open books and c4 show differences in:
+- **punctuation**: the training corpus has all punctuation removed
+- **capitalization**: the training corpus is all lower case while C4 is mixed case, allowing for identification of entities, sentence structure, and emphasis.
+- **style**: narrative and conversational vs. informational and commercial 
+
+Toronto Open Books:
+```commandline
+she said you may find this hard to believe but there was very little acting it was
+horrible we became those people we were those people she said that today people would
+probably call it method acting but added we didnt know what method acting was we just
+called it getting on with it syms said that during the scene where the ambulance rolls
+backwards down the hill narrowly avoiding her the actors assumed there would be a hawser
+to stop the vehicle if anything went wrong but there was not the actress said she was
+pretty sure mills quayle and andrews angrily upbraided director j lee thompson for
+this risky approach she added he liked to push actors a bit
+```
+
+C4
+```
+Biomedics 1 Day Extra are daily replacement disposable contact lenses by CooperVision
+Hydron. Buy one box of 90 lenses. Biomedics 1 Day Extra contacts give you all the
+convenience of a daily disposable lens with no need for solutions, cases or cleaning
+and are perfect for the occasional wear. These lenses have greater comfort handling with
+superior ease of insertion and removal. Biomedic 1 Day Extra are also marketed under
+various other brand names including Clear Choice 1-day, Ascend 1-day, easyvision CLARISION
+SPHERE, Clearsight 1 Day and ProView Daily Disposable.
+```
+
+
 ## Loading OpenAI's Pretrained Weights
 
 To validate my implementation, I loaded OpenAI's pretrained GPT-2 124M weights into my model architecture. This required careful weight manipulation to account for minor difference between implementations.
 
 - OpenAI GPT2 uses a **Fused QKV matrix** while my model uses separate Q, K, V matrices, which is a more direct interpretation of the design from Attention is All You need. I acknowledge that the fused matrix implementation may be more performance.
 - Transpose all weights to convert from TensorFlow's format to PyTorch
-- Added QKV biases to my model. (I originally omitted these, but added later for compatability)
+- Added QKV biases to my model. (I originally omitted these, but added later bias terms for compatability)
 - Tediously munge various layer names to align naming conventions. OpenAI used fairly terse (but standard) naming, but I choose to be a bit more descriptive. 
 
 ### Weight Transformation Process
@@ -185,7 +236,7 @@ It took several tries to get weights loaded and for the model produces coherent 
     - write a basic training script from pytorch references
     - made changes required to move model/tensors to gpu, using tensor cores, bfloat16, compiling model
     - improved output stauts printing
-- [ ] **Evaluation**: Implement eval strategies for next token completion and instruction handling
+- [x] **Evaluation**: Implement eval for next token completion (perplexity)
 - [X] **Visualization**: Extract attention weights and visualize to identify patterns.
 - [ ] **Finetuning**: train for sentiment classification and instruction following
 - [X] **ML Ops**: Deploy wandb for productionalization and checkpointing for restarts

@@ -260,6 +260,8 @@ def main():
         'training-corpus': {'dataset_name': 'shahrukhx01/wikipedia-bookscorpus-en-preprocessed', 'split': 'train', 'streaming': True},
         'wikitext-103': {'dataset_name': 'wikitext:wikitext-103-v1', 'split': 'test'},
         'simple-wikipedia': {'dataset_name': 'wikimedia/wikipedia:20231101.simple', 'split': 'train', 'streaming': True},
+        'fineweb-edu': {'dataset_name': 'HuggingFaceFW/fineweb-edu:sample-10BT', 'split': 'train',
+                        'streaming': True},
         'c4': {'dataset_name': 'c4:en', 'split': 'train', 'max_samples': 50, 'streaming': True}
     }
     tasks_to_run = {name: all_tasks[name] for name in args.tasks if name in all_tasks}
