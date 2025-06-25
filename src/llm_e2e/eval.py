@@ -23,8 +23,10 @@ class EvalConfig:
     device: str = 'cpu'
     max_seq_len: int = 128
     log_interval: int = 100
+    normalize_text: bool = False # remove all punctuation, non-alphanum, and lowercase
     debug: bool = False
-    text_chunk_target_size: int = 300 # add this line
+    text_chunk_target_size: int = 300
+    
 
 class PerplexityEvaluator:
     """evaluates perplexity on text datasets"""
@@ -35,22 +37,30 @@ class PerplexityEvaluator:
         self.cfg = config
         self.model.eval()
         self.model.to(config.device)
+        self.normalize_text = config.normalize_text
 
         # limit punctuation and letters to what we have in training
-        self.allowed_punctuation = set("""! . , ? ' " : ; -`.""")
-        self._allowed_chars = {chr(c) for c in range(ord('a'), ord('z') + 1)}
-        self._allowed_chars.update(chr(c) for c in range(ord('0'), ord('9') + 1))
-        self._allowed_chars.update(self.allowed_punctuation)
-        self._allowed_chars.add(' ')
-        self.is_allowed_char = lambda c: c in self._allowed_chars
+        if self.normalize_text:
+            self.allowed_punctuation = set() #set("""! . , ? ' " : ; -`.""")
+            self._allowed_chars = {chr(c) for c in range(ord('a'), ord('z') + 1)}
+            self._allowed_chars.update(chr(c) for c in range(ord('0'), ord('9') + 1))
+            self._allowed_chars.update(self.allowed_punctuation)
+            self._allowed_chars.add(' ')
+            self._allowed_chars.add('\n')
+            self._allowed_chars.add('\t')
+            self.is_allowed_char = lambda c: c in self._allowed_chars
+        else:
+            self.is_allowed_char = lambda c: True
 
     def _preprocess_text(self, text: str) -> str:
         """
         preprocesses text to match training corpus by converting
         to lowercase and removing punctuation.
         """
-        text = text.lower()
-        text = "".join(char for char in text if self.is_allowed_char(char))
+        if self.normalize_text:
+            text = text.lower()
+            text = "".join(char for char in text if self.is_allowed_char(char))
+
         return text
 
     def evaluate(self, dataset_name: str, split: str = "test", max_samples: int = None, streaming: bool = False) -> dict:
@@ -132,46 +142,26 @@ class PerplexityEvaluator:
 
     def _iterate_texts(self, dataset) -> Iterator[str]:
         """
-        Pulls data from the dataset in a consistent way so that datasets with long input sequences are split up
-        so that they match the typical token lengths we trained on.
+        Iterates through a dataset, yielding the processed text of one document at a time.
         """
-        text_buffer = []
-        current_chunk_size = 0
-        target_size = self.cfg.text_chunk_target_size
-
         for example in dataset:
             # this chain of gets accounts for different text keys in datasets
             raw_text = example.get('highlights',
                                    example.get('sentence',
                                                example.get('text',
                                                         example.get('content', ''))))
-            if not raw_text:
+            if not raw_text or not isinstance(raw_text, str):
                 continue
 
-            # split by paragraph to handle long articles gracefully
-            paragraphs = raw_text.split('\n\n')
+            # Preprocess the entire document's text at once.
+            processed_text = self._preprocess_text(raw_text.strip())
 
-            for paragraph in paragraphs:
-                # remove funny punctuation and lowercase text
-                processed_paragraph = self._preprocess_text(paragraph.strip())
+            # Skip empty or very short documents.
+            if len(processed_text.split()) < 10:
+                continue
 
-                # skip empty or very short paragraphs
-                if len(processed_paragraph.split()) < 10:
-                    continue
-
-                # add the new paragraph to the buffer
-                text_buffer.append(processed_paragraph)
-                current_chunk_size += len(processed_paragraph)
-
-                # if the buffer is full, yield the sample
-                if current_chunk_size >= target_size:
-                    yield " ".join(text_buffer)
-                    text_buffer = []
-                    current_chunk_size = 0
-
-        # after the loop finishes, yield any remaining text in the buffer
-        if text_buffer:
-            yield " ".join(text_buffer)
+            # Yield the full text of one processed document.
+            yield processed_text
 
     def _print_debug_info(self, sample_num, text, tokens, n_predictions, loss):
         """output a single sample for debugging"""
@@ -211,6 +201,7 @@ def run_eval(args, tasks_to_run):
     eval_cfg = EvalConfig(
         device='cuda' if torch.cuda.is_available() else 'cpu',
         max_seq_len=cfg.context_length,
+        normalize_text=args.normalize_text,
         debug=args.debug
     )
 
@@ -253,6 +244,7 @@ def main():
     parser.add_argument('--config', default='config/gpt2_bert_corpus_gpu.yaml', help='path to config file')
     parser.add_argument('--tasks', nargs='*', help='tasks to run (training-corpus, wikitext-103, c4, simple-wikipedia)', required=True)
     parser.add_argument('--max-samples', type=int, default=1000, help='maximum samples for custom dataset or config default')
+    parser.add_argument('--normalize-text', action='store_true', help='lower case text and remove punctuation')
     parser.add_argument('--debug', action='store_true', help='enable debug mode')
     args = parser.parse_args()
 
