@@ -1,28 +1,28 @@
-# LLM End-to-End: An Experimentation and Learning Framework for Decoder-Style Language Models
-
-## Abstract
-
-Large language models (LLMs) have become increasingly accessible and put into production across diverse applications. While the adaptability of modern pretrained models is remarkable, it is crucial to understand and debug the fundamentals of how these models work to apply them effectively. This project is a complete implementation and instrumentation framework for decoder-style language models, with a focus on the well-understood GPT-2 architecture [1]. The key components are modularized to enable systematic exploration of model behavior under different architectural and training hyperparameters. Through the extensibility of each component, the design serves as both an educational resource and a platform for conducting experiments on autoregressive language modeling. As a demonstration, I pre-train my own GPT-2 model from scratch, extract and visualize attention weights to highlight how the model interprets patterns of text, and show how the model can be aligned with human preferences.
+# Decoder-Style Language Models from the ground up
 
 ## Introduction
+As language models are increasingly used in applications that go far beyond simple next-token prediction, understanding them from first principles is incredibly useful. While modern pre-trained models are highly adaptable, high-level APIs often obscure the core mechanics and insights into their behavior, limitations, and optimization. This project is a complete implementation and framework built from the ground up to provide the understanding to adapt these models to novel tasks.
 
-Understanding the inner workings of large language models is critical as these systems play a more prominent role in a wide range of applications, many going well beyond simple natural language processing and token prediction. While pre-trained models are readily available, the ability to build, train, and analyze these models from first principles provides invaluable insights into their behavior, limitations, and optimization.
+I built the framework's key components from scratch—including the GPT-2 model architecture, the training loops, and the evaluation pipeline—and developed modular components to analyze model behavior under different hyperparameters. I built this using the open-source stack (PyTorch, Weights & Biases, Hugging Face) to implement these ideas on the toolset used by most of the AI community, contrasting with my experience in Google's TensorFlow and JAX ecosystem.
 
-This project has five key objectives:
+To show what we can learn by diving deep into the stack, I pre-train a custom GPT-2 model, visualize its attention weights to interpret its behavior, and show how it can be aligned for a specific task.
+
+note: During model evaluation, I discovered an interesting challenge: the original Toronto Open Book Corpus has been lost and is now only available in lowercase with punctuation removed. Could I train a model to restore the original text?
+
+I structured my work into 5 main parts.
 
 1. **Architecture Replication**: Reproduce the GPT-2 model architecture [1] in PyTorch with clear, documented code that connects theoretical concepts to practical implementation. Verify the implementation by loading and running OpenAI's pre-trained weights.
 
-2. **Training Framework Development**: Build an end-to-end training pipeline that including efficient data loaders optimized for next-token prediction, streaming dataset support for large-scale training, integration with [Weights & Biases](https://wandb.ai/) for ML Ops and experiment tracking, and model state checkpointing for restartability.
+2. **Training Framework Development**: Build an end-to-end training pipeline that includes efficient data loaders optimized for next-token prediction, streaming dataset support for large-scale training, integration with [Weights & Biases](https://wandb.ai/) for ML Ops and experiment tracking, and model state checkpointing for restartability.
 
 3. **Representation Analysis**: Visualize learned representations, with particular emphasis on attention patterns [4], to provide insights into how the model processes and relates tokens within its context window.
 
-4. **Fine-tuning and Alignment**: Apply supervised fine-tuning (SFT) and alignment techniques to adapt the model to human preferences, demonstrating how base language models can be shaped for specific tasks and behaviors.
+4. **Fine-tuning and Alignment**: Apply supervised fine-tuning (SFT) and alignment techniques to adapt the model to human preferences, demonstrating how base language models can be shaped for specific tasks.
 
-5. **Performance**: Implement the highest ROI strategies to significantly improve model training and inferences performance including word alignment, quantization, KV caching, and quantization.
+5. **Performance**: Implement key optimizations to significantly improve model training and inference performance including memory alignment, mixed precision training, KV caching, and quantization.
+`## Training
 
-## Training
-
-### Pre-training from Scratch
+## Pre-training from Scratch
 
 I pre-trained a 33.6M parameter GPT-2 from scratch using a curated Wikipedia + BookCorpus dataset. This corpus was originally prepared for BERT training, with all text lowercased, markdown removed, and special punctuation cleaned. My hypothesis: could a cleaner, more consistent corpus enable a model 4x smaller than GPT-2 124M to achieve similar language understanding? The preprocessed text—free from formatting distractions and inconsistent capitalization—should theoretically require less model capacity to learn core linguistic patterns.
 
@@ -33,10 +33,10 @@ I pre-trained a 33.6M parameter GPT-2 from scratch using a curated Wikipedia + B
 The validation loss chart reveals three distinct phases:
 
 1. **High Learning Rate Phase** (LR=0.009, Steps 0-100k): Rapid initial descent from ~9.4 to ~7.0
-2. **Manual Intervention** (LR=0.001, Steps 100k-200k): cut learning rate by 90% to stabalize training
+2. **Manual Intervention** (LR=0.001, Steps 100k-200k): cut learning rate by 90% to stabilize training
 3. **Cosine Annealing** (Steps 200k-370k): Smooth convergence to best loss of 3.6432 at step 310,811
 
-The chart also shows two other attemps, one with too high a learning rate (gradients explode) and a too low learning rate with a fast initial decent, but very slow improvement afterwards.
+The chart also shows two other attempts, one with too high a learning rate (gradients explode) and a too low learning rate with a fast initial descent, but very slow improvement afterwards.
 
 **Training Duration**: Approximately 5 hours for 370k steps on a single GPU (~1,200 steps/minute)
 
@@ -44,7 +44,7 @@ The chart also shows two other attemps, one with too high a learning rate (gradi
 
 <img src="assets/gradient_sum.png" alt="Gradient Sum" width="600"/>
 
-The monotonically increasing gradient magnitude (0.48→0.54) indicates headroom remains. This steady growth in gradient norms, even as validation loss improved, demonstrates the model was still finding meaningful parameter updates and exploring productive regions. With 170k steps of cosine annealing completed, the healthy gradient signal suggests extended training would likely yield further improvements. Perhaps into the 3.5-3.6 range.
+The monotonically increasing gradient magnitude (0.48→0.54) indicates headroom remains. This steady growth in gradient norms, even as validation loss improved, demonstrates the model was still finding meaningful parameter updates. With 170k steps of cosine annealing completed, the healthy gradient signal suggests extended training would likely yield further improvements. Perhaps into the 3.5-3.6 range.
 
 ### Language Acquisition
 
@@ -72,7 +72,7 @@ I downloaded OpenAI's open sourced weights for GPT2 124M. Although the model arc
 "...fence."
 "...cat. drawing to me the all colourful bowl of splendor..."
 
-While GPT-2 124M shows more grounded, everyday completions, my 33.6M parameter model exhibits similar grammatical competence despite being 4x smaller. The cleaner training data appears to have enabled efficient learning of syntactic patterns, though semantic grounding remains a challenge at this scale.
+While GPT-2 124M shows more grounded, everyday completions, my 33.6M parameter model exhibits similar grammatical skill being 4x smaller. The cleaner training data appears to have helped it learn patterns efficiently, though semantics remains a challenge at this scale.
 
 ### Key Observations
 
@@ -91,62 +91,70 @@ The [visualization notebook](notebooks/05_visualize_attention.ipynb) instruments
 ![Attention Patterns for the second to last layer](assets/attention_gpt2_774M_layer11.png)
 *Attention patterns in the second-to-last layer. The model correctly attends to 'brown suitcase' when generating 'a larger', as shown by the highlighted rows for 'a' and 'larger'.*
 
-## Out Of Sample Evaluation
-```bash
+## Out-of-Sample Evaluation
 
-python -m llm_e1e.eval --task simple-wikipedia training-corpus c4 --max-samples 1000
-```
+### Distribution Shift Analysis
 
-I compared model perplexity based on next token prediction against the training corpus, simple-wikipedia, and c4 (common crawl). 
+To assess generalization beyond the training data, I evaluated the model's perplexity—the exponentiated cross-entropy loss (e^loss) measuring uncertainty in next-token predictions—across five distinct corpora using the evaluation pipeline:
 
 ```bash
-[BERT-CORPUS]
------------------
-  perplexity: 66.779
-  loss: 4.201
-  samples: 1000
-  
-[C4]
-----
-  perplexity: 5850.555
-  loss: 8.674
-  samples: 1000
-```
-The model performs as expected on text similar to its training data, but performs poorly on out of corpus text including
-simple-wikipedia and c4. Inspecting samples from open books and c4 show differences in:
-- **punctuation**: the training corpus has all punctuation removed
-- **capitalization**: the training corpus is all lower case while C4 is mixed case, allowing for identification of entities, sentence structure, and emphasis.
-- **style**: narrative and conversational vs. informational and commercial 
-
-Toronto Open Books:
-```commandline
-she said you may find this hard to believe but there was very little acting it was
-horrible we became those people we were those people she said that today people would
-probably call it method acting but added we didnt know what method acting was we just
-called it getting on with it syms said that during the scene where the ambulance rolls
-backwards down the hill narrowly avoiding her the actors assumed there would be a hawser
-to stop the vehicle if anything went wrong but there was not the actress said she was
-pretty sure mills quayle and andrews angrily upbraided director j lee thompson for
-this risky approach she added he liked to push actors a bit
+python -m llm_e2e.eval --task simple-wikipedia training-corpus c4 --max-samples 1000
 ```
 
-C4
+The results show significant sensitivity to preprocessing:
+
+| Corpus | Perplexity | Loss | Avg Tokens/Doc |
+|--------|------------|------|----------------|
+| Training Corpus | 37.9 | 3.635 | 138.5 |
+| Wikitext-103 | 365,590 | 12.809 | 156.3 |
+| Simple Wikipedia | 408,507 | 12.920 | 984.4 |
+| FineWeb-Edu | 223,299 | 12.316 | 819.7 |
+| C4 (Common Crawl) | 106,116 | 11.572 | 419.2 |
+
+### Distribution Shift Impact
+
+The extreme performance degradation across all out-of-domain corpora (2,800-10,800x higher perplexity) demonstrates the model's sensitivity to distribution shift. However, the relative ordering reveals interesting patterns: C4 performs best among out-of-domain datasets, followed by FineWeb-Edu, then the Wikipedia variants.
+
+**Preprocessing Differences**: The BERT-corpus preprocessing removed punctuation and lowercased all text, creating a simplified text format. Modern corpora retain case sensitivity for entity recognition and punctuation for syntax.
+
+**Content Style**: Training data emphasized narrative and conversational patterns from books, while C4 contains commercial, technical, and informational content with different writing patterns.
+
+**Vocabulary Gaps**: The cleaned training vocabulary lacks specialized terminology prevalent in web-scraped content.
+
+### Corpus Comparison
+
+**Training Corpus Sample** (Toronto Open Books):
 ```
-Biomedics 1 Day Extra are daily replacement disposable contact lenses by CooperVision
-Hydron. Buy one box of 90 lenses. Biomedics 1 Day Extra contacts give you all the
-convenience of a daily disposable lens with no need for solutions, cases or cleaning
-and are perfect for the occasional wear. These lenses have greater comfort handling with
-superior ease of insertion and removal. Biomedic 1 Day Extra are also marketed under
-various other brand names including Clear Choice 1-day, Ascend 1-day, easyvision CLARISION
-SPHERE, Clearsight 1 Day and ProView Daily Disposable.
+she said you may find this hard to believe but there was very little acting it was horrible we became those people we were those people she said that today people would probably call it method acting but added we didnt know what method acting was we just called it getting on with it syms said that during the scene where the ambulance rolls backwards down the hill narrowly avoiding her the actors assumed there would be a hawser to stop the vehicle if anything went wrong but there was not
 ```
 
+**C4 Sample**:
+```
+Biomedics 1 Day Extra are daily replacement disposable contact lenses by CooperVision Hydron. Buy one box of 90 lenses. Biomedics 1 Day Extra contacts give you all the convenience of a daily disposable lens with no need for solutions, cases or cleaning and are perfect for the occasional wear. These lenses have greater comfort handling with superior ease of insertion and removal.
+```
 
+### Preprocessing Normalization Experiment
+
+To isolate the impact of preprocessing differences, I applied similar cleaning transformations to out-of-domain corpora:
+
+```bash
+python -m llm_e2e.eval --task training-corpus wikitext-103 simple-wikipedia fineweb-edu c4 --max-samples 200 --normalize-text
+```
+
+| Corpus | Before | After | Avg Tokens/Doc |
+|--------|--------|-------|----------------|
+| Training Corpus | 37.9 | 37.9 | 138.5 |
+| Wikitext-103 | 365,590 | 67.9 | 156.3 |
+| Simple Wikipedia | 408,507 | 82.7 | 984.4 |
+| FineWeb-Edu | 223,299 | 331.2 | 819.7 |
+| C4 | 106,116 | 378.7 | 419.2 |
+
+Normalization brings Wikitext-103 and Simple Wikipedia close to training corpus performance (67.9 and 82.7 vs 37.9 perplexity), suggesting preprocessing differences are the primary barrier for encyclopedic content. The similar post-normalization performance between these Wikipedia-based datasets indicates that data leakage, while possible, is likely not the dominant factor. However, C4 and FineWeb-Edu remain challenging even after cleaning (378.7 and 331.2 perplexity), confirming that commercial and technical content presents genuine challenges beyond formatting.
 ## Loading OpenAI's Pretrained Weights
 
 To validate my implementation, I loaded OpenAI's pretrained GPT-2 124M weights into my model architecture. This required careful weight manipulation to account for minor difference between implementations.
 
-- OpenAI GPT2 uses a **Fused QKV matrix** while my model uses separate Q, K, V matrices, which is a more direct interpretation of the design from Attention is All You need. I acknowledge that the fused matrix implementation may be more performance.
+- OpenAI GPT2 uses a **Fused QKV matrix** while my model uses separate Q, K, V matrices, which is a more direct interpretation of the design from Attention is All You need. I acknowledge that the fused matrix implementation may be more performant.
 - Transpose all weights to convert from TensorFlow's format to PyTorch
 - Added QKV biases to my model. (I originally omitted these, but added later bias terms for compatability)
 - Tediously munge various layer names to align naming conventions. OpenAI used fairly terse (but standard) naming, but I choose to be a bit more descriptive. 
@@ -196,7 +204,7 @@ It took several tries to get weights loaded and for the model produces coherent 
     * `FeedForward`: The position-wise feed-forward network, using GELU activation.
     * `LayerNorm`: A standard layer normalization implementation.
     * `GELU`: The Gaussian Error Linear Unit activation function.
-    The implementation references OpenAI's GPT-2 paper and Andrej Karpathy's nanoGPT. The model also includes `generate` method for text generation and following Andrej's example, can product both logits and loss in the forward pass if Ys are provided. Instrumentation hooks were added to enable visualization of attention vectors.
+    The implementation references OpenAI's GPT-2 paper and Andrej Karpathy's nanoGPT. The model also includes `generate` method for text generation and following Andrej's example, can produce both logits and loss in the forward pass if Ys are provided. Instrumentation hooks were added to enable visualization of attention vectors.
 
 * **`src/llm_e2e/trainer.py`**: (deprecates notebooks/03_gpt2_training.ipynb) Executes training inclusive of logging and checkpointing. 
     * A training loop that iterates through epochs and batches, performs forward and backward passes, and updates model parameters.

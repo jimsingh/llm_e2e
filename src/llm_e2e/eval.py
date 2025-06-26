@@ -1,7 +1,10 @@
 
 import argparse
+import math
 import os
 import sys
+
+from collections import Counter
 from collections.abc import Iterator
 from dataclasses import dataclass
 
@@ -10,12 +13,6 @@ import tiktoken
 from datasets import load_dataset
 
 from llm_e2e import GPT2Config, GPT2Model
-import argparse
-import os
-import sys
-from collections import Counter  # Add this line
-from collections.abc import Iterator
-from dataclasses import dataclass
 
 @dataclass
 class EvalConfig:
@@ -26,7 +23,6 @@ class EvalConfig:
     normalize_text: bool = False # remove all punctuation, non-alphanum, and lowercase
     debug: bool = False
     text_chunk_target_size: int = 300
-    
 
 class PerplexityEvaluator:
     """evaluates perplexity on text datasets"""
@@ -72,6 +68,7 @@ class PerplexityEvaluator:
         total_tokens = 0
         samples_processed = 0
         skipped_samples = 0
+        document_token_count = 0
 
         print(f"evalating (max_samples={max_samples or 'all'})")
 
@@ -87,7 +84,9 @@ class PerplexityEvaluator:
                 samples_processed += 1
                 
                 document_tokens = self.tokenizer.encode(text, allowed_special="all")
-                
+                document_token_count += len(document_tokens)  # track actual doc length
+            
+
                 for chunk_tokens in self._chunk_document(document_tokens):
                     
                     if len(chunk_tokens) < 2:
@@ -108,7 +107,7 @@ class PerplexityEvaluator:
 
         print(f"eval complete: {samples_processed} documents, {skipped_samples} skipped")
 
-        return self._calculate_final_metrics(total_loss, total_tokens, samples_processed, skipped_samples)
+        return self._calculate_final_metrics(total_loss, total_tokens, samples_processed, skipped_samples, document_token_count)
 
     def _chunk_document(self, tokens: list[int]) -> Iterator[list[int]]:
         """yields chunks of a tokenized document with overlap."""
@@ -132,7 +131,7 @@ class PerplexityEvaluator:
         return loss.item(), num_predictions
 
     def _load_dataset(self, dataset_name: str, split: str, streaming: bool):
-        """use hugging face data loaders """
+        """load the dataset using huggingface dataloaders"""
         if ":" in dataset_name:
             path, config_name = dataset_name.split(":", 1)
             dataset = load_dataset(path, config_name, split=split, streaming=streaming, trust_remote_code=True)
@@ -153,14 +152,12 @@ class PerplexityEvaluator:
             if not raw_text or not isinstance(raw_text, str):
                 continue
 
-            # Preprocess the entire document's text at once.
+            # preprocess and keep document of sufficient length
             processed_text = self._preprocess_text(raw_text.strip())
-
-            # Skip empty or very short documents.
-            if len(processed_text.split()) < 10:
+            if len(processed_text.split()) < 30:
                 continue
 
-            # Yield the full text of one processed document.
+            # yield full text of one document
             yield processed_text
 
     def _print_debug_info(self, sample_num, text, tokens, n_predictions, loss):
@@ -175,23 +172,32 @@ class PerplexityEvaluator:
         print(f"[{i+1:5d}] documents: {samples:4d}, ppl: {current_ppl:7.2f}, "
               f"avg_tokens/doc: {avg_tokens:.1f}, skipped: {skipped}")
 
-    def _calculate_final_metrics(self, total_loss, total_tokens, samples, skipped):
+    def _calculate_final_metrics(self, total_loss, total_tokens, samples, skipped, total_document_tokens):
         """calculates and returns the final evaluation metrics"""
         perplexity = avg_loss = float('inf')
         if total_tokens > 0:
             import math
-            #perplexity = torch.exp(torch.tensor(total_loss / total_tokens)).item()
             perplexity = math.exp(total_loss / total_tokens)
             avg_loss = total_loss / total_tokens
 
         return {
-            "perplexity": perplexity,
-            "loss": avg_loss,
-            "samples": samples,
-            "tokens": total_tokens,
-            "skipped": skipped,
-            "avg_tokens_per_sample": total_tokens / samples
+            # model performance metrics
+            "perplexity": perplexity,                    # exp(avg_loss) - lower is better, measures prediction quality
+            "loss": avg_loss,                            # average cross-entropy loss per prediction
+            
+            # document stats
+            "documents_processed": samples,               # documents evaluated
+            "documents_skipped": skipped,                 # documents skipped (too short, empty, etc)
+            
+            # token counts
+            "predictions_evaluated": total_tokens,          # total prediction positions evaluated (includes overlap)
+            "document_tokens_total": total_document_tokens, # sum of original document lengths (no overlap)
+            
+            # derived statistics
+            "avg_document_length": total_document_tokens / samples if samples > 0 else 0,  # average tokens per document
+            "avg_predictions_per_doc": total_tokens / samples if samples > 0 else 0,       # includes overlapping chunks
         }
+
 
 def run_eval(args, tasks_to_run):
     print(f"model: {args.model}")
@@ -256,7 +262,11 @@ def main():
                         'streaming': True},
         'c4': {'dataset_name': 'c4:en', 'split': 'train', 'max_samples': 50, 'streaming': True}
     }
-    tasks_to_run = {name: all_tasks[name] for name in args.tasks if name in all_tasks}
+
+    if 'all' in args.tasks:
+        tasks_to_run = all_tasks
+    else:
+        tasks_to_run = {name: all_tasks[name] for name in args.tasks if name in all_tasks}
 
     run_eval(args, tasks_to_run)
 
