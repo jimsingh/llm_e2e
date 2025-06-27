@@ -70,7 +70,7 @@ class StreamingDatasetGenerator:
                 continue
 
             # text -> token ids
-            tokens = self.encoding.encode_ordinary(processed_txt)
+            tokens = self.encoding.encode_ordinary(txt)
             tokens.append(self.encoding.eot_token)
             all_tokens.extend(tokens)
             
