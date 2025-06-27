@@ -7,7 +7,7 @@ I built the framework's key components from scratch—including the GPT-2 model 
 
 To show what we can learn by diving deep into the stack, I pre-train a custom GPT-2 model, visualize its attention weights to interpret its behavior, and show how it can be aligned for a specific task.
 
-note: During model evaluation, I discovered an interesting challenge: the original Toronto Open Book Corpus has been lost and is now only available in lowercase with punctuation removed. Could I train a model to restore the original text?
+update: During model evaluation, I discovered an interesting challenge: the original Toronto Open Book Corpus has been lost and is now only available in lowercase with punctuation removed. Could I train a model to restore the original text?
 
 I structured my work into 5 main parts.
 
@@ -44,45 +44,39 @@ The chart also shows two other attempts, one with too high a learning rate (grad
 
 <img src="assets/gradient_sum.png" alt="Gradient Sum" width="600"/>
 
-The monotonically increasing gradient magnitude (0.48→0.54) indicates headroom remains. This steady growth in gradient norms, even as validation loss improved, demonstrates the model was still finding meaningful parameter updates. With 170k steps of cosine annealing completed, the healthy gradient signal suggests extended training would likely yield further improvements. Perhaps into the 3.5-3.6 range.
+The monotonically increasing gradient magnitude (0.48 -> 0.54) indicates the model is still finding improvements. Given the validation loss is decreasing and does not indicate overfitting, there is likely headroom to get down to the 3.5-3.6 range.
 
 ### Language Acquisition
 
-Monitoring the model's completions of "The quick brown fox jumps over the..." shows progress of linguistic development:
+  Monitoring the model's completions of "The quick brown fox jumps over the..." shows progress of linguistic development. A few examples that show learning breakthroughs:
 
-**Step 197k** (syntax, but still complete nonsense):
+**Step 197k** (syntax, but still nonsense):
 "...carpet and proceeds to train him for the skunks last business"
 
 **Step 227k** (an action sequence):
 "...window after crossing a downhill rock indoors a kick blob"
 
-**Step 289k** (complex grammar, surealism):
+**Step 289k** (complex grammar, sureal rather than nonsense):
 "...ladder flipping across the roof and the fans throw their feet against the ground killing themselves"
 
 **Step 273k** (brevity - model knows when to stop!):
 "...wire"
 
-The progression has a clear pattern: structure -> narrative patterns -> length control. The model mastered grammatical rules before semantic coherence. This is characteristic of pure autoregressive pre-training without grounding.
+The progression has a pattern: structure -> narrative patterns -> length control. The model mastered grammatical rules before semantic coherence. This is characteristic of pure autoregressive pre-training without grounding.
 
 ### Comparison with GPT-2 124M
 
-I downloaded OpenAI's open sourced weights for GPT2 124M. Although the model architectures are very similar, there  For context, here are GPT-2 124M's completions of the same prompt:
+I downloaded OpenAI's open sourced weights for GPT2 124M. Although the model architectures are very similar, I did have to massage the model weights so that they would load into my model architecture. For context, here are GPT-2 124M's completions of the same prompt:
 
 "...curb. It's ready to go. I glance around for sinkholes..."
 "...fence."
 "...cat. drawing to me the all colourful bowl of splendor..."
 
-While GPT-2 124M shows more grounded, everyday completions, my 33.6M parameter model exhibits similar grammatical skill being 4x smaller. The cleaner training data appears to have helped it learn patterns efficiently, though semantics remains a challenge at this scale.
-
-### Key Observations
-
-- **Perplexity-Quality Gap**: Best validation loss (3.6432) corresponded to grammatically correct but semantically unusual generations
-- **Emergent Conciseness**: Later training stages showed increasingly focused completions
-- **Data Quality Impact**: The preprocessed corpus enabled stable training dynamics despite aggressive initial learning rates
+While GPT-2 124M shows more grounded, everyday completions, my 33.6M parameter model exhibits similar skill despite being 4x smaller. The cleaner training data appears to have helped it learn patterns efficiently, though semantics remains a challenge at this scale.
 
 Configuration: `config/gpt2-bert-corpus-gpu.yaml` | Single GPU | bfloat16 precision | torch.compile optimization
 
-# Model Interpretability
+# Model Evaluation
 
 ## Attention Visualization
 
@@ -91,6 +85,9 @@ The [visualization notebook](notebooks/05_visualize_attention.ipynb) instruments
 ![Attention Patterns for the second to last layer](assets/attention_gpt2_774M_layer11.png)
 *Attention patterns in the second-to-last layer. The model correctly attends to 'brown suitcase' when generating 'a larger', as shown by the highlighted rows for 'a' and 'larger'.*
 
+## Rank Analysis
+TODO: I plan to analyize the weights of the model to see if low rank approximation could further shrink the model, particularly in the token and positional layers. A similar optimization exists in some BERT-like models.
+
 ## Out-of-Sample Evaluation
 
 ### Distribution Shift Analysis
@@ -98,10 +95,10 @@ The [visualization notebook](notebooks/05_visualize_attention.ipynb) instruments
 To assess generalization beyond the training data, I evaluated the model's perplexity—the exponentiated cross-entropy loss (e^loss) measuring uncertainty in next-token predictions—across five distinct corpora using the evaluation pipeline:
 
 ```bash
-python -m llm_e2e.eval --task simple-wikipedia training-corpus c4 --max-samples 1000
+python -m llm_e2e.eval --task all --max-samples 1000
 ```
 
-The results show significant sensitivity to preprocessing:
+The results show a lack of generalization and I investigated the root cause. 
 
 | Corpus | Perplexity | Loss | Avg Tokens/Doc |
 |--------|------------|------|----------------|
@@ -113,7 +110,7 @@ The results show significant sensitivity to preprocessing:
 
 ### Distribution Shift Impact
 
-The extreme performance degradation across all out-of-domain corpora (2,800-10,800x higher perplexity) demonstrates the model's sensitivity to distribution shift. However, the relative ordering reveals interesting patterns: C4 performs best among out-of-domain datasets, followed by FineWeb-Edu, then the Wikipedia variants.
+The performance degradation across all out-of-domain corpora (2,800-10,800x higher perplexity!) was surprising. In particular, the relative ordering: C4 performs best among out-of-domain datasets, followed by FineWeb-Edu, and then the Wikipedia variants. My expectation was that because the bert training corpus contained wikipedia samples, it would out perform. The unexpected pattern meant there were factors beyond content similarity at play. I considered three potential causes:
 
 **Preprocessing Differences**: The BERT-corpus preprocessing removed punctuation and lowercased all text, creating a simplified text format. Modern corpora retain case sensitivity for entity recognition and punctuation for syntax.
 
@@ -149,7 +146,8 @@ python -m llm_e2e.eval --task training-corpus wikitext-103 simple-wikipedia fine
 | FineWeb-Edu | 223,299 | 331.2 | 819.7 |
 | C4 | 106,116 | 378.7 | 419.2 |
 
-Normalization brings Wikitext-103 and Simple Wikipedia close to training corpus performance (67.9 and 82.7 vs 37.9 perplexity), suggesting preprocessing differences are the primary barrier for encyclopedic content. The similar post-normalization performance between these Wikipedia-based datasets indicates that data leakage, while possible, is likely not the dominant factor. However, C4 and FineWeb-Edu remain challenging even after cleaning (378.7 and 331.2 perplexity), confirming that commercial and technical content presents genuine challenges beyond formatting.
+Normalization brings Wikitext-103 and Simple Wikipedia close to training corpus performance (67.9 and 82.7 vs 37.9 perplexity), suggesting preprocessing differences are key for encyclopedic content. The similar post-normalization performance between these Wikipedia-based datasets indicates that data leakage, while likely, is not a dominant factor. However, C4 and FineWeb-Edu remain challenging even after cleaning (378.7 and 331.2 perplexity), confirming that commercial and technical content presents genuine challenges beyond formatting.
+
 ## Loading OpenAI's Pretrained Weights
 
 To validate my implementation, I loaded OpenAI's pretrained GPT-2 124M weights into my model architecture. This required careful weight manipulation to account for minor difference between implementations.
