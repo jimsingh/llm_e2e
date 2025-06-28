@@ -7,7 +7,9 @@ I built the framework's key components from scratch—including the GPT-2 model 
 
 To show what we can learn by diving deep into the stack, I pre-train a custom GPT-2 model, visualize its attention weights to interpret its behavior, and show how it can be aligned for a specific task.
 
-update: During model evaluation, I discovered an interesting challenge: the original Toronto Open Book Corpus has been lost and is now only available in lowercase with punctuation removed. Could I train a model to restore the original text?
+update 1: During model evaluation, I discovered an interesting challenge: the original Toronto Open Book Corpus has been lost and is now only available in lowercase with punctuation removed. Could I train a model to restore the original text?
+
+update 2: As mentioned in my [Evaluation Analysis](#Out-of-Sample Evaluation), the preprocessing of the BERT corpus makes it difficult for an LLM trained with this dataset to generalize to other corpora. To understand how a dataset with full punctuation impacts model performance, I'm retraining using Fineweb-Edu. It will likely take _more_ steps to achieve the same loss, so it will be difficult to have a direct comparison.
 
 I structured my work into 5 main parts.
 
