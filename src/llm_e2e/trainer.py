@@ -48,8 +48,9 @@ class TrainerState:
         self.elapsed_time += elapsed
 
     @property
-    def throughput(self) -> float:
-        return self.tokens_processed / self.elapsed_time if self.elapsed_time > 0 else 0.0
+    def throughput(self) -> int:
+        tput = self.tokens_processed / self.elapsed_time if self.elapsed_time > 0 else 0
+        return int(tput)
 
     def reset_recent(self):
         self.running_loss = 0.0
@@ -179,7 +180,11 @@ class GPT2Trainer:
             f"\n[Epoch {epoch + 1}/{self.cfg.num_epochs}, max_steps: {self.cfg.max_steps}] "
             f"Started at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
         )
-        
+
+		# loss explosion protection
+        max_loss = 11.0
+       	prev_loss = max_loss 
+
         for i, (X, Y) in enumerate(self.train_loader):
             # Check if next step would exceed max_steps
             if self.state.step >= self.cfg.max_steps:
@@ -190,7 +195,8 @@ class GPT2Trainer:
              
             # train single batch
             batch_start_time = time.time()
-            loss = self._train_batch(X, Y)
+            loss = self._train_batch(X, Y, prev_loss, max_loss)
+            prev_loss = loss.item()
             batch_time = time.time() - batch_start_time
 
             self.state.update_loss(loss.item())
@@ -204,18 +210,24 @@ class GPT2Trainer:
                 avg_loss = self.state.get_avg_loss(self.cfg.log_interval)
                 current_lr = self.optimizer.param_groups[0]['lr']
                 self.log(
-                    f"[{epoch + 1} {i + 1:5d}] Running loss: {avg_loss:.3f}",
-                    {'step': self.state.step, 'lr': current_lr, 
+                    f"[{epoch + 1:2d} {i + 1:5d}/{self.cfg.max_steps}] running loss: {avg_loss:.3f}",
+                    {'step': self.state.step, 'lr': f"{current_lr:.3e}",
                      'running_loss': avg_loss, 't/s': self.state.throughput}
                 )
                 self.state.reset_recent()
     
-    def _train_batch(self, X, Y):
+    def _train_batch(self, X, Y, prev_loss, max_loss):
         """process single training batch"""
         X, Y = X.to(self.device), Y.to(self.device)
         
         self.optimizer.zero_grad()
         logits, loss = self.model(X, Y)
+
+		# safe guard against a bad batches causing gradient / loss explosion ...
+        if loss.item() > max_loss or loss.item() > 3 * prev_loss or not torch.isfinite(loss):
+        	print(f"Skipping batch: loss={loss.item()}")
+        	return prev_loss  # Return previous loss
+
         loss.backward()
 
         # clip gradients if they get beyond our limit
@@ -342,7 +354,11 @@ class GPT2Trainer:
         self.optimizer.load_state_dict(self.state.optimizer_state_dict)
         if self.scheduler:
             self.scheduler.load_state_dict(self.state.scheduler_state_dict)
-        
+
+        # set the learning rate from config to allow override
+        for param_group in self.optimizer.param_groups:
+            param_group['lr'] = self.cfg.learning_rate
+
         self.log(
             f"Loaded checkpoint from {filepath}\n"
             f"Resuming from epoch {self.state.epoch}, step {self.state.step}"

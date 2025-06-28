@@ -33,7 +33,7 @@ def setup_cuda(cfg: GPT2Config):
 def create_scheduler(cfg: GPT2Config, optimizer):
     warmup = LinearLR(optimizer, start_factor=0.1, total_iters=cfg.warmup_steps)
 
-    annealing_steps = cfg.max_steps - cfg.warmup_steps
+    annealing_steps = (cfg.max_steps - cfg.warmup_steps) // 2
     main_scheduler = CosineAnnealingLR(
         optimizer,
         T_max=annealing_steps,  # steps to decay
@@ -70,16 +70,28 @@ def main(config_yaml: str):
     if cfg.compile_model:
         model = torch.compile(model)
 
-    # create optimizer
+    # we don't decay params that shift (bias) or normalize (layernorm). These
+    # parameters don't learn data, they stabalize the model. Decaying them may
+    # do more harm than good.
+    param_decays = [
+        {
+            "params": [p for n, p in model.named_parameters() if p.dim() >= 2],
+            "weight_decay": cfg.weight_decay,
+        },
+        {
+            "params": [p for n, p in model.named_parameters() if p.dim() < 2], # excludes bias, layer norm
+            "weight_decay": 0.0,
+        },
+    ]
+
     optimizer = torch.optim.AdamW(
-        model.parameters(),
+        param_decays, 
         lr=cfg.learning_rate,
-        weight_decay=cfg.weight_decay
+        betas=(cfg.beta1, cfg.beta2)
     )
 
     # tone down the LR at first and then switch to our main scheduler 
     scheduler = create_scheduler(cfg, optimizer)
-
 
     # create text generator
     gen_f = lambda m: generate_text(m, encoding, "The quick brown fox jumps over the")
@@ -129,6 +141,12 @@ def main(config_yaml: str):
                     print("Starting fresh training")
             else:
                 print("Starting fresh training")
+
+        # randomize dataloader using the current step. This ensures
+        # we see different data after restart, but isn't ideal for
+        # situations were need to process every batch of data
+        if trainer.state.step > 0 and trainer.state.epoch == 0:
+           trainer.train_loader.start_step = trainer.state.step
 
         # train
         trainer.train(text_generator=gen_f)
