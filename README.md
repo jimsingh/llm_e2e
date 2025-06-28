@@ -185,6 +185,61 @@ Output: "big, so it went into a box"
 
 It took several tries to get weights loaded and for the model produces coherent completions. But, this confirmed successful weight transfer despite the architectural differences. 
 
+## Training using FineWeb-Edu
+
+### Training Summary
+<img src="assets/fineweb_edu-val_loss_vs_time.png" alt="FineWeb-Edu Validation Loss vs Time" width="600"/>
+
+Two training runs: (1) learning rate = 3e-3 required manual intervention due to training plateau, (2) learning rate = 6e-4 achieved stable training without intervention.
+
+### Dataset Transition Motivation
+
+After discovering that the BERT corpus preprocessing limited generalization performance (see [Out-of-Sample Evaluation](#out-of-sample-evaluation)), I transitioned to [FineWeb-Edu](https://huggingface.co/datasets/HuggingFaceFW/fineweb-edu), one of the highest-quality datasets available for LLM training. FineWeb-Edu is a curated subset of Common Crawl data, filtered for educational content while retaining natural text formatting including punctuation and capitalization.
+
+This dataset addresses the core limitation identified in the evaluation: my BERT-trained model had learned representations optimized for simplified text without punctuation or proper capitalization, resulting in poor performance on standard English text with natural formatting.
+
+### Initial Training Approach
+
+Given FineWeb-Edu's reputation as a clean, modern dataset, my assumption was that higher data quality would enable a "set it and forget it" training approach.
+
+However, this proved overly optimistic. While the dataset is indeed higher quality, it presents significantly more linguistic complexity than the preprocessed BERT corpus, requiring more conservative hyperparameters. After about 12 hours and 100,000 steps of training on a single GPU, validation loss oscillated around 3.6 for 40k steps. At that point I decided manual intervention was required.
+
+### Gradient Explosion and Attention Collapse
+
+The aggressive learning rate initially appeared successful, but with training stuck and gradient norms in the 0.20 range, I felt the learning rate was too high. I interrupted training and manually updated the learning rate to 6e-4. However, a bug in my code only updated the optimizer learning rate while the decay schedule had already been computed based on the original higher learning rate. As a result, the learning rate crossed zero into negative territory. The effect was that gradients were now being removed from weights, causing the model to move in the wrong direction and fail spectacularly.
+
+```
+[ 1  6000/300000] running loss: 3.595, {'step': 176349, 'lr': '-4.383e-05'}
+[ 1  6300/300000] running loss: 3.648, {'step': 176649, 'lr': '-7.107e-05'}
+[ 1  6600/300000] running loss: 40.164, {'step': 176949, 'lr': '-9.877e-05'}
+[ 1  6900/300000] running loss: 118.453, {'step': 177249, 'lr': '-1.269e-04'}
+[ 1  7200/300000] running loss: 121.585, {'step': 177549, 'lr': '-1.556e-04'}
+```
+
+The model began generating pathologically repetitive outputs:
+
+```
+[1/ 7500] The quick brown fox jumps over the HuffPost HuffPost HuffPost HuffPost 
+HuffPost HuffPost HuffPost HuffPost HuffPost HuffPost HuffPost HuffPost HuffPost 
+HuffPost HuffPost HuffPost HuffPost HuffPost HuffPost HuffPost
+```
+
+Given that I had built up a number of model and training improvements and my goal was to have a set-it-and-forget-it training loop, I decided not to roll back to a known good checkpoint and instead improve the training logic.
+
+### Training Stabilization Strategies
+
+To guard against instability, I implemented several robustness measures:
+
+**Conservative Learning Rate**: Reduced learning rate to 6e-4, providing stable convergence without manual intervention. This matches OpenAI's learning rate for a small GPT3 model. [11]
+
+**Gradient Clipping**: Implemented gradient norm clipping to prevent explosion during attention entropy collapse events.
+
+Future Improvements:
+**SigmaReparam**: track attention entropy (conentration) as described in the Apple paper on gradient explosions. [10]
+
+**Enhanced Monitoring**: Gradient norms are already tracked, but weight update magnitude, AdamW momentum norm, and comparing momentum and gradient norms are all worth considering. 
+
+
 
 # Code Pointers
 
@@ -264,6 +319,10 @@ It took several tries to get weights loaded and for the model produces coherent 
 
 [7] Clark, K., Khandelwal, U., Levy, O., & Manning, C. D. (2019). [What does BERT look at? An analysis of BERT's attention](https://arxiv.org/abs/1906.04341). *Proceedings of the 2019 Conference on Empirical Methods in Natural Language Processing*.
 
-[8] Kaplan, J., McCandlish, S., Henighan, T., Brown, T. B., Chess, B., Child, R., ... & Amodei, D. (2020). [Scaling laws for neural language models](https://arxiv.org/abs/2001.08361). *arXiv preprint arXiv:2001.08361*.
+[8] Kaplan, J., McCandlish, S., Henighan, T., Brown, T. B., Chess, B., Child, R., ... & Amodei, D. (2020). [Scaling laws for neural language models](https://arxiv.org/abs/2001.08361).
 
 [9] Elhage, N., Nanda, N., Olsson, C., Henighan, T., Joseph, N., Mann, B., ... & Olah, C. (2021). [A mathematical framework for transformer circuits](https://transformer-circuits.pub/2021/framework/index.html). *Transformer Circuits Thread*.
+
+[10] Zhai, Shuangfei, Tatiana Likhomanenko, Etai Littwin, Dan Busbridge, Jason Ramapuram, Yizhe Zhang, Jiatao Gu, and Josh Susskind. (2023). [Stabilizing transformer training by preventing attention entropy collapse](https://arxiv.org/abs/2303.06296).
+
+[11] Brown, T., Mann, B., Ryder, N., Subbiah, M., Kaplan, J. D., Dhariwal, P., ... & Amodei, D. (2020). [Language models are few-shot learners](https://arxiv.org/abs/2005.14165). *Advances in neural information processing systems*, 33, 1877-1901.
