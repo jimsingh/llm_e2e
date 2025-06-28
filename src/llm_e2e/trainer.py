@@ -48,8 +48,9 @@ class TrainerState:
         self.elapsed_time += elapsed
 
     @property
-    def throughput(self) -> float:
-        return self.tokens_processed / self.elapsed_time if self.elapsed_time > 0 else 0.0
+    def throughput(self) -> int:
+        tput = self.tokens_processed / self.elapsed_time if self.elapsed_time > 0 else 0
+        return int(tput)
 
     def reset_recent(self):
         self.running_loss = 0.0
@@ -204,8 +205,8 @@ class GPT2Trainer:
                 avg_loss = self.state.get_avg_loss(self.cfg.log_interval)
                 current_lr = self.optimizer.param_groups[0]['lr']
                 self.log(
-                    f"[{epoch + 1} {i + 1:5d}] Running loss: {avg_loss:.3f}",
-                    {'step': self.state.step, 'lr': current_lr, 
+                    f"[{epoch + 1:2d} {i + 1:5d}/{self.cfg.max_steps}] running loss: {avg_loss:.3f}",
+                    {'step': self.state.step, 'lr': f"{current_lr:.3e}",
                      'running_loss': avg_loss, 't/s': self.state.throughput}
                 )
                 self.state.reset_recent()
@@ -342,7 +343,11 @@ class GPT2Trainer:
         self.optimizer.load_state_dict(self.state.optimizer_state_dict)
         if self.scheduler:
             self.scheduler.load_state_dict(self.state.scheduler_state_dict)
-        
+
+        # set the learning rate from config to allow override
+        for param_group in self.optimizer.param_groups:
+            param_group['lr'] = self.cfg.learning_rate
+
         self.log(
             f"Loaded checkpoint from {filepath}\n"
             f"Resuming from epoch {self.state.epoch}, step {self.state.step}"
