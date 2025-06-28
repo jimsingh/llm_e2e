@@ -180,7 +180,11 @@ class GPT2Trainer:
             f"\n[Epoch {epoch + 1}/{self.cfg.num_epochs}, max_steps: {self.cfg.max_steps}] "
             f"Started at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
         )
-        
+
+		# loss explosion protection
+        max_loss = 11.0
+       	prev_loss = max_loss 
+
         for i, (X, Y) in enumerate(self.train_loader):
             # Check if next step would exceed max_steps
             if self.state.step >= self.cfg.max_steps:
@@ -191,7 +195,8 @@ class GPT2Trainer:
              
             # train single batch
             batch_start_time = time.time()
-            loss = self._train_batch(X, Y)
+            loss = self._train_batch(X, Y, prev_loss, max_loss)
+            prev_loss = loss.item()
             batch_time = time.time() - batch_start_time
 
             self.state.update_loss(loss.item())
@@ -211,12 +216,18 @@ class GPT2Trainer:
                 )
                 self.state.reset_recent()
     
-    def _train_batch(self, X, Y):
+    def _train_batch(self, X, Y, prev_loss, max_loss):
         """process single training batch"""
         X, Y = X.to(self.device), Y.to(self.device)
         
         self.optimizer.zero_grad()
         logits, loss = self.model(X, Y)
+
+		# safe guard against a bad batches causing gradient / loss explosion ...
+        if loss.item() > max_loss or loss.item() > 3 * prev_loss or not torch.isfinite(loss):
+        	print(f"Skipping batch: loss={loss.item()}")
+        	return prev_loss  # Return previous loss
+
         loss.backward()
 
         # clip gradients if they get beyond our limit

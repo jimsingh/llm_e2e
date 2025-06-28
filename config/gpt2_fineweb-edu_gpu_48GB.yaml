@@ -9,19 +9,19 @@ model:
     emb_dim: 384
     n_heads: 8
     n_layers: 12 
-    dropout_rate: 0.02
+    dropout_rate: 0.01
     qkv_bias: False
     mlp_bias: True
 
 training:
     num_epochs: 1
-    learning_rate: 0.007
+    learning_rate: 0.0006 # GPT-3
     batch_size: 192
     log_interval: 300
     eval_iters: 30
     eval_interval: 1500
     save_interval: 1500
-    warmup_steps: 20_000
+    warmup_steps: 10_000
     max_steps: 300_000
 
 logging:

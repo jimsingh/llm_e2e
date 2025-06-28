@@ -21,6 +21,7 @@ class StreamingDatasetGenerator:
         self.cfg = cfg
         self.encoding = encoding
         self.seed = seed
+        self.start_step = 0
         self.val_frac = val_frac
         self._get_text = lambda d: d if isinstance(d, str) else d['text']
         self.shuffle_buffer_size = shuffle_buffer_size 
@@ -35,7 +36,7 @@ class StreamingDatasetGenerator:
     def __iter__(self):
         """Reset for new epoch and return self as iterator."""
         self.counter += 1
-        epoch_seed = self.seed + self.counter
+        epoch_seed = self.seed + self.counter + self.start_step
         
         # Create shuffled dataset for this epoch with larger buffer
         self.dataset = self.base_dataset.shuffle(seed=epoch_seed, buffer_size=self.shuffle_buffer_size)
