@@ -100,9 +100,13 @@ class StreamingDatasetGenerator:
     
     def _should_include_doc(self, text: str) -> bool:
         """Decide if a document belongs to train or val based on hash of its content."""
-        doc_hash = hashlib.md5(text.encode('utf-8')).hexdigest()
-        hash_int = int(doc_hash, 16)
-        hash_fraction = (hash_int % 10000) / 10000.0
+        if len(text) < 50:
+            return False
+
+        if self.val_frac == 0.0 or self.val_frac >= 1.0:
+            return True
+
+        hash_fraction = (hash(text) % 10_000) / 10_000.0
         
         if self.split == 'train':
             return hash_fraction >= self.val_frac
