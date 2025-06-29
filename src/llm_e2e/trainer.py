@@ -267,7 +267,7 @@ class GPT2Trainer:
         # log evaluation
         self.log(
             f"[{epoch + 1}/{batch_idx:5d}] "
-            f"Train loss: {losses['train']:.4f}, Val loss: {losses['val']:.4f}",
+            f"Train loss: {train_loss:.4f}, Val loss: {val_loss:.4f}",
             metrics,
             commit = False
         )
@@ -277,8 +277,8 @@ class GPT2Trainer:
         self.save_checkpoint(checkpoint_name)
         
         # update best model
-        if losses['val'] < self.state.best_val_loss:
-            self.state.best_val_loss = losses['val']
+        if val_loss < self.state.best_val_loss:
+            self.state.best_val_loss = val_loss
             self.save_checkpoint(f"{self.cfg.save_filename}_best")
     
     @torch.no_grad()
