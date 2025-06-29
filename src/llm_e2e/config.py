@@ -15,7 +15,7 @@ class GPT2Config:
         "training": [
             "num_epochs", "learning_rate", "weight_decay", "beta1", "beta2",
             "grad_clip", "warmup_steps", "max_steps", "batch_size",
-            "eval_iters", "eval_interval", "save_interval"
+            "eval_iters", "eval_interval", "eval_prompt", "save_interval"
         ],
         "system": ["device", "compile_model", "dtype"],
         "logging": ["wandb_log", "wandb_project", "wandb_run_name"],
@@ -54,9 +54,10 @@ class GPT2Config:
     log_interval: int                   = 200
     eval_iters: int                     = 50
     eval_interval: int                  = 1_00
+    eval_prompt: str                    = "The main reason why"
     save_interval: int                  = 10_000
     save_filename: str                  = field(init = False)
-
+    
     # System
     device: str                         = 'cuda'
     compile_model: bool                 = True
@@ -66,7 +67,7 @@ class GPT2Config:
     wandb_log: bool                     = False
     wandb_project: str                  = "llm_e2e"
     wandb_run_name: str                 = ""
-    
+     
     @classmethod
     def from_yaml(cls, yaml_path: str) -> 'GPT2Config':
         """Load config from nested YAML structure."""

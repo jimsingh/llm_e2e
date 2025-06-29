@@ -7,6 +7,8 @@ import os
 import sys
 import torch
 import tiktoken
+
+import torch.backends.cuda
 from torch.optim.lr_scheduler import CosineAnnealingLR, LinearLR, SequentialLR
 
 from pathlib import Path
@@ -14,6 +16,20 @@ from pathlib import Path
 from llm_e2e import GPT2Config, GPT2Model, StreamingDatasetGenerator, WandbLogger, GPT2Trainer
 from llm_e2e.trainer import generate_text
 
+def setup_flash_attention():
+    if torch.cuda.is_available():
+        # Enable Flash Attention v2
+        torch.backends.cuda.enable_flash_sdp(True)
+
+        # Enable memory-efficient attention (fallback)
+        torch.backends.cuda.enable_mem_efficient_sdp(True)
+
+        # Disable math attention (slower fallback)
+        torch.backends.cuda.enable_math_sdp(False)
+
+        print("Flash Attention enabled")
+    else:
+        print("CUDA not available, Flash Attention disabled")
 
 def setup_cuda(cfg: GPT2Config):
     """setup CUDA following project patterns"""
@@ -30,13 +46,15 @@ def setup_cuda(cfg: GPT2Config):
     else:
         print("tensor cores not supported on this gpu.")
 
+    setup_flash_attention()
+
 def create_scheduler(cfg: GPT2Config, optimizer):
     warmup = LinearLR(optimizer, start_factor=0.1, total_iters=cfg.warmup_steps)
 
-    annealing_steps = (cfg.max_steps - cfg.warmup_steps) // 2
+    annealing_steps = (cfg.max_steps - cfg.warmup_steps) // 4
     main_scheduler = CosineAnnealingLR(
         optimizer,
-        T_max=annealing_steps,  # steps to decay
+        T_max=annealing_steps,
         eta_min=cfg.learning_rate * 0.1
     )
 
@@ -94,7 +112,7 @@ def main(config_yaml: str):
     scheduler = create_scheduler(cfg, optimizer)
 
     # create text generator
-    gen_f = lambda m: generate_text(m, encoding, "The quick brown fox jumps over the")
+    gen_f = lambda m: generate_text(m, encoding, cfg.eval_prompt)
 
     # train with wandb logging
     with WandbLogger(cfg, model) as logger:
