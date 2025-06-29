@@ -203,14 +203,14 @@ class GPT2Trainer:
             self.state.update_tokens(self.tokens_per_batch, batch_time)
 
             # periodic evaluation
-            if (i + 1) % self.cfg.eval_interval == 0:
-                self._evaluate_and_checkpoint(epoch, i, text_generator)
+            if self.state.step % self.cfg.eval_interval == 0:
+                self._evaluate_and_checkpoint(epoch, self.state.step, text_generator)
 
             if (i + 1) % self.cfg.log_interval == 0:
                 avg_loss = self.state.get_avg_loss(self.cfg.log_interval)
                 current_lr = self.optimizer.param_groups[0]['lr']
                 self.log(
-                    f"[{epoch + 1:2d} {i + 1:5d}/{self.cfg.max_steps}] running loss: {avg_loss:.3f}",
+                    f"[{epoch + 1:2d} {self.state.step:5d}/{self.cfg.max_steps}] running loss: {avg_loss:.3f}",
                     {'step': self.state.step, 'lr': f"{current_lr:.3e}",
                      'running_loss': avg_loss, 't/s': self.state.throughput}
                 )
@@ -246,12 +246,13 @@ class GPT2Trainer:
     
     def _evaluate_and_checkpoint(self, epoch: int, batch_idx: int, text_generator):
         """evaluate model and save checkpoint"""
-        losses = self.evaluate()
-        
+        val_loss = self.evaluate()
+        train_loss = self.state.get_avg_loss(self.cfg.log_interval)
+
         # prepare metrics
         metrics = {
-            'train_loss': losses['train'],
-            'val_loss': losses['val'],
+            'train_loss': train_loss,
+            'val_loss': val_loss,
             'step': self.state.step,
             'gradient_sum': self.state.avg_gradient_norm,
             'epoch': epoch + 1
@@ -260,12 +261,12 @@ class GPT2Trainer:
         # generate and log sample text
         if text_generator:
             completion = text_generator(self.model)
-            print(f"[{epoch + 1}/{batch_idx + 1:5d}] {completion}")
+            print(f"[{epoch + 1}/{batch_idx:5d}] {completion}")
             metrics['generated_text'] = completion
         
         # log evaluation
         self.log(
-            f"[{epoch + 1}/{batch_idx + 1:5d}] "
+            f"[{epoch + 1}/{batch_idx:5d}] "
             f"Train loss: {losses['train']:.4f}, Val loss: {losses['val']:.4f}",
             metrics,
             commit = False
@@ -283,9 +284,8 @@ class GPT2Trainer:
     @torch.no_grad()
     def evaluate(self) -> dict[str, float]:
         """evaluate model on train and validation sets"""
-        train_loss = self._estimate_loss(self.train_loader)
         val_loss = self._estimate_loss(self.val_loader)
-        return {'train': train_loss, 'val': val_loss}
+        return val_loss
     
     def _estimate_loss(self, loader) -> float:
         """estimate average loss over eval_iters batches"""
