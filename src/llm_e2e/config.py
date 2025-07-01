@@ -6,7 +6,7 @@ import time
 @dataclass
 class GPT2Config:
     FIELD_SECTIONS: ClassVar[dict[str, list[str]]] = {
-        "data": ["dataset_path", "dataset_name"],
+        "data": ["dataset_path", "dataset_name", "val_split"],
         "tokenizer": ["encoding_name", "eos_token_id"],
         "model": [
             "vocab_size", "context_length", "emb_dim",
@@ -24,6 +24,7 @@ class GPT2Config:
     # Data
     dataset_path: str                   = 'HuggingFaceFW/fineweb-edu'
     dataset_name: str                   = 'sample-10BT'
+    val_split: str                      = None
 
     # tokenizer
     encoding_name: str                  = 'gpt2'

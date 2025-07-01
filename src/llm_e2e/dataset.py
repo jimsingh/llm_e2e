@@ -14,7 +14,7 @@ class StreamingDatasetGenerator:
     """Loads a Hugging Face dataset and wraps it as a generator."""
     
     def __init__(self, cfg: GPT2Config, encoding: Any, split: str = 'train', 
-                 dataset_split: str = 'train', seed: int = 42, val_frac: float = 0.1,
+                 dataset_split: str = 'train', seed: int = 42, val_frac: float = 0.0,
                  shuffle_buffer_size=100_000):
         self.counter = 0
         self.split = split

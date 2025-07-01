@@ -247,11 +247,9 @@ class GPT2Trainer:
     def _evaluate_and_checkpoint(self, epoch: int, batch_idx: int, text_generator):
         """evaluate model and save checkpoint"""
         val_loss = self.evaluate()
-        train_loss = self.state.get_avg_loss(self.cfg.log_interval)
 
         # prepare metrics
         metrics = {
-            'train_loss': train_loss,
             'val_loss': val_loss,
             'step': self.state.step,
             'gradient_sum': self.state.avg_gradient_norm,
@@ -266,8 +264,7 @@ class GPT2Trainer:
         
         # log evaluation
         self.log(
-            f"[{epoch + 1}/{batch_idx:5d}] "
-            f"Train loss: {train_loss:.4f}, Val loss: {val_loss:.4f}",
+            f"[{epoch + 1}/{batch_idx:5d}], val loss: {val_loss:.4f}",
             metrics,
             commit = False
         )
@@ -354,10 +351,6 @@ class GPT2Trainer:
         self.optimizer.load_state_dict(self.state.optimizer_state_dict)
         if self.scheduler:
             self.scheduler.load_state_dict(self.state.scheduler_state_dict)
-
-        # set the learning rate from config to allow override
-        for param_group in self.optimizer.param_groups:
-            param_group['lr'] = self.cfg.learning_rate
 
         self.log(
             f"Loaded checkpoint from {filepath}\n"

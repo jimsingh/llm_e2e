@@ -5,6 +5,7 @@ This would replace the training logic in notebooks/03_gpt2_training.ipynb
 import argparse
 import os
 import sys
+import math
 import torch
 import tiktoken
 
@@ -51,11 +52,11 @@ def setup_cuda(cfg: GPT2Config):
 def create_scheduler(cfg: GPT2Config, optimizer):
     warmup = LinearLR(optimizer, start_factor=0.1, total_iters=cfg.warmup_steps)
 
-    annealing_steps = (cfg.max_steps - cfg.warmup_steps) // 4
+    annealing_steps = (cfg.max_steps - cfg.warmup_steps)
     main_scheduler = CosineAnnealingLR(
         optimizer,
         T_max=annealing_steps,
-        eta_min=cfg.learning_rate * 0.1
+        eta_min=min(cfg.learning_rate * 0.1, 5e-6)
     )
 
     print(f"scheduler: warmup_steps={cfg.warmup_steps}, anealing_steps={annealing_steps}, total_steps={cfg.max_steps}")
@@ -75,7 +76,10 @@ def main(config_yaml: str):
 
     # create datasets
     train_dataset = StreamingDatasetGenerator(cfg, encoding=encoding)
-    val_dataset = StreamingDatasetGenerator(cfg, encoding=encoding, split='val', seed=1337)
+    if cfg.val_split:
+        val_dataset = StreamingDatasetGenerator(cfg, encoding=encoding, dataset_split=cfg.val_split, seed=1337)
+    else:
+        val_dataset = StreamingDatasetGenerator(cfg, encoding=encoding, split='val', val_frac=0.05, seed=1337)
 
     # create model
     model = GPT2Model(cfg)
@@ -159,6 +163,14 @@ def main(config_yaml: str):
                     print("Starting fresh training")
             else:
                 print("Starting fresh training")
+
+        if checkpoint_loaded:
+             for param_group in trainer.optimizer.param_groups:
+                 lr = param_group['lr']
+                 if not math.isclose(lr, cfg.learning_rate):
+                     param_group['lr'] = cfg.learning_rate
+                     print("learning rate changed, disabling scheduler")
+                     trainer.scheduler = None
 
         # randomize dataloader using the current step. This ensures
         # we see different data after restart, but isn't ideal for
