@@ -9,7 +9,7 @@ To show what we can learn by diving deep into the stack, I pre-train a custom GP
 
 update 1: During model evaluation, I discovered an interesting challenge: the original Toronto Open Book Corpus has been lost and is now only available in lowercase with punctuation removed. Could I train a model to restore the original text?
 
-update 2: As mentioned in my [Evaluation Analysis](#Out-of-Sample Evaluation), the preprocessing of the BERT corpus makes it difficult for an LLM trained with this dataset to generalize to other corpora. To understand how a dataset with full punctuation impacts model performance, I'm retraining using Fineweb-Edu. It will likely take _more_ steps to achieve the same loss, so it will be difficult to have a direct comparison.
+update 2: As mentioned in my [Evaluation Analysis](#out-of-sample-evaluation), the preprocessing of the BERT corpus makes it difficult for an LLM trained with this dataset to generalize to other corpora. To understand how a dataset with full punctuation impacts model performance, I'm retraining using Fineweb-Edu. It will likely take _more_ steps to achieve the same loss, so it will be difficult to have a direct comparison.
 
 I structured my work into 5 main parts.
 
@@ -22,7 +22,7 @@ I structured my work into 5 main parts.
 4. **Fine-tuning and Alignment**: Apply supervised fine-tuning (SFT) and alignment techniques to adapt the model to human preferences, demonstrating how base language models can be shaped for specific tasks.
 
 5. **Performance**: Implement key optimizations to significantly improve model training and inference performance including memory alignment, mixed precision training, KV caching, and quantization.
-`## Training
+## Training
 
 ## Pre-training from Scratch
 
@@ -82,7 +82,7 @@ Configuration: `config/gpt2-bert-corpus-gpu.yaml` | Single GPU | bfloat16 precis
 
 ## Attention Visualization
 
-The [visualization notebook](notebooks/05_visualize_attention.ipynb) instruments the model and extracts attention layers during inference. We can plots these layers as a heatmap to visualize the attention relationship between tokens.
+The [visualization notebook](notebooks/05_visualize_attention.ipynb) instruments the model and extracts attention layers during inference. We can plot these layers as a heatmap to visualize the attention relationship between tokens.
 
 ![Attention Patterns for the second to last layer](assets/attention_gpt2_774M_layer11.png)
 *Attention patterns in the second-to-last layer. The model correctly attends to 'brown suitcase' when generating 'a larger', as shown by the highlighted rows for 'a' and 'larger'.*
@@ -192,7 +192,7 @@ It took several tries to get weights loaded and for the model produces coherent 
 ### Training Summary
 <img src="assets/fineweb_edu-val_loss_vs_time.png" alt="FineWeb-Edu Validation Loss vs Time" width="600"/>
 
-Two training runs: (1) learning rate = 3e-3 required manual intervention due to training plateau, (2) learning rate = 6e-4 achieved stable training without intervention.
+  Two training runs: (1) learning rate = 3e-3 required manual intervention due to training plateau, (2) learning rate = 6e-4 achieved stable training without intervention, but hit a relatively high plateau (3.6).
 
 ### Dataset Transition Motivation
 
@@ -206,9 +206,9 @@ Given FineWeb-Edu's reputation as a clean, modern dataset, my assumption was tha
 
 However, this proved overly optimistic. While the dataset is indeed higher quality, it presents significantly more linguistic complexity than the preprocessed BERT corpus, requiring more conservative hyperparameters. After about 12 hours and 100,000 steps of training on a single GPU, validation loss oscillated around 3.6 for 40k steps. At that point I decided manual intervention was required.
 
-### Gradient Explosion and Attention Collapse
+### Gradient Explosion and Attention Collapse!
 
-The aggressive learning rate initially appeared successful, but with training stuck and gradient norms in the 0.20 range, I felt the learning rate was too high. I interrupted training and manually updated the learning rate to 6e-4. However, a bug in my code only updated the optimizer learning rate while the decay schedule had already been computed based on the original higher learning rate. As a result, the learning rate crossed zero into negative territory. The effect was that gradients were now being removed from weights, causing the model to move in the wrong direction and fail spectacularly.
+The aggressive learning rate initially appeared successful, but with training stuck and gradient norms in the 0.20 range, I felt the learning rate was too high. I interrupted training and manually updated the learning rate to 6e-4. However, a bug in my code updated the _optimizer_ learning rate, but the decay schedule had already been calcuated using the original higher learning rate. The learning rate crossed zero into negative territory and gradients were being removed from weights. As expected, training failed spectacularly.
 
 ```
 [ 1  6000/300000] running loss: 3.595, {'step': 176349, 'lr': '-4.383e-05'}
@@ -218,7 +218,7 @@ The aggressive learning rate initially appeared successful, but with training st
 [ 1  7200/300000] running loss: 121.585, {'step': 177549, 'lr': '-1.556e-04'}
 ```
 
-The model began generating pathologically repetitive outputs:
+The model also began generating pathologically repetitive outputs:
 
 ```
 [1/ 7500] The quick brown fox jumps over the HuffPost HuffPost HuffPost HuffPost 
@@ -226,18 +226,70 @@ HuffPost HuffPost HuffPost HuffPost HuffPost HuffPost HuffPost HuffPost HuffPost
 HuffPost HuffPost HuffPost HuffPost HuffPost HuffPost HuffPost
 ```
 
-Given that I had built up a number of model and training improvements and my goal was to have a set-it-and-forget-it training loop, I decided not to roll back to a known good checkpoint and instead improve the training logic.
+Given that I had been working on a number of training improvements and my goal was to have a set-it-and-forget-it training loop, I decided not to roll back to a known good checkpoint and instead restart training.
 
-### Training Stabilization Strategies
+### Model Capacity Concerns
+Looking at completions, (before gradient explosion) the model lost coherence quickly.
+```
+The quick brown fox jumps over the face. This situation is tenfold, because it is surrounded by 400 out so some males experience const
+```
 
-To guard against instability, I implemented several robustness measures:
+Given the postive gradient norms, long plateau, and clean, but dense corpus (FineWeb-Edu). The model was likely nearing a capacity limit. Since my first goal was coherence and I wanted to move on to calculating ICL, I pulled all the stops:
 
-**Conservative Learning Rate**: Reduced learning rate to 6e-4, providing stable convergence without manual intervention. This matches OpenAI's learning rate for a small GPT3 model. [11]
+- context_length: 384->512 # the attention matrix calculates a token-to-token scores, this is a quadratic increase in the attention matrix size.
+- emb_dim: 384->512 # more learnable parameters allocated to each head
+- layers: 12 # same depth as GPT2 small
+- learning_rate: 6e-4 # given larger model size and success reported by OpenAI with this LR
+- enabled pytorch's flash attention v2
+- moved the prompt to complete into the config and default to a more generic prompt `The main reason why`
+- ran model eval much less often (once every 5,000 steps)
+- allowed lR to be overridden after restart by disables the scheduler if LR changes
+- annealing only runs one cycle (LR never goes back up) 
 
-**Gradient Clipping**: Implemented gradient norm clipping to prevent explosion during attention entropy collapse events.
+With these changes in place, the model size grew to 66M parameters, but the training optimizations kept training speed (measured in tokens / second) roughly flat (137k tokens / second). The best validation achieved is 3.37, perplexity e^(3.37) = 29. Not bad for $5 of GPU time!
+
+Let's rerun our perplexity eval:
+
+| Model | open books | WikiText-103 | Simple Wikipedia | FineWeb-EDU | C4 |
+|-------|------------|--------------|------------------|-------------|-----|
+| GPT2-63M (latest) | 202.13 | 81.29 | 33.00 | 31.65 | 55.59 |
+| GPT2-63M (best) | 213.97 | 88.29 | 32.71 | 33.40 | 52.26 |
+| GPT2-33M | 39.83 | 305,383 | 504,193 | 196,370 | 174,530 |
+
+As we can see, the newly trained model generalizes far better out-of-domain data (such as C4). 
+
+Qualitatively, we can explore model with prompting:
+
+World Knowledge!
+```
+Prompt: The capital of France is
+Response: The capital of France is, of course, at the turn of the 20th century, the city of Paris.
+```
+
+Sequential pattern completion!
+```
+Prompt: a is followed by b. b is followed by c. c is followed by
+Response: a is followed by b. b is followed by c. c is followed by d. e is followed
+```
+
+In Context Learning!
+```
+Prompt: John lives in New York City. Alice lives in London. John lives in 
+Response: John lives in New York City. Alice lives in London. John lives in New York.
+```
+
+In Context Learning with hallucination!
+```
+Prompt: John lives in the capital of England. London is the capital of England. John lives in
+Response: John lives in the capital of England. London is the capital of England. John lives in Edinburgh.
+- John is a member of Parliament. He was the first person to say what is not in English.
+- John is also a member of the House of York. He is not a member of Parliament anymore.
+```
+
+# TODO: Compute numeric scores for ICL such as next token perplexity early / late in the sequence
 
 Future Improvements:
-**SigmaReparam**: track attention entropy (conentration) as described in the Apple paper on gradient explosions. [10]
+**SigmaReparam**: track attention entropy (concentration) as described in the Apple paper on gradient explosions. [10]
 
 **Enhanced Monitoring**: Gradient norms are already tracked, but weight update magnitude, AdamW momentum norm, and comparing momentum and gradient norms are all worth considering. 
 
