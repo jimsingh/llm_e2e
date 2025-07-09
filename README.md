@@ -7,9 +7,9 @@ I built the framework's key components from scratch—including the GPT-2 model 
 
 To show what we can learn by diving deep into the stack, I pre-train a custom GPT-2 model, visualize its attention weights to interpret its behavior, and show how it can be aligned for a specific task.
 
-update 1: During model evaluation, I discovered an interesting challenge: the original Toronto Open Book Corpus has been lost and is now only available in lowercase with punctuation removed. Could I train a model to restore the original text?
+update 1: During model evaluation, I discovered an interesting challenge: the original Toronto Open Book Corpus has been lost and is now only available in lowercase with punctuation removed. I decided to fine-tune a model to [restore capitalization and punctuation](corpus-restoration.md).
 
-update 2: As mentioned in my [Evaluation Analysis](#out-of-sample-evaluation), the preprocessing of the BERT corpus makes it difficult for an LLM trained with this dataset to generalize to other corpora. To understand how a dataset with full punctuation impacts model performance, I'm retraining using Fineweb-Edu. It will likely take _more_ steps to achieve the same loss, so it will be difficult to have a direct comparison.
+update 2: As mentioned in my [Evaluation Analysis](#out-of-sample-evaluation), the preprocessing of the BERT corpus makes it difficult for an LLM trained with this dataset to generalize to other corpora. To understand how a dataset with full punctuation impacts model performance, I [retrained](#training-using-fineweb-edu) after switching to [Fineweb-Edu](https://huggingface.co/datasets/HuggingFaceFW/fineweb-edu), expanded the model size, improved training efficiency, and evaluated this model on unseen data. I also tested the models world knowledge and in-context learning ability.
 
 I structured my work into 5 main parts.
 
@@ -244,16 +244,19 @@ Given the postive gradient norms, long plateau, and clean, but dense corpus (Fin
 - moved the prompt to complete into the config and default to a more generic prompt `The main reason why`
 - ran model eval much less often (once every 5,000 steps)
 - allowed lR to be overridden after restart by disables the scheduler if LR changes
+- used a faster hash function in the data loader to create test/validation splits
 - annealing only runs one cycle (LR never goes back up) 
 
-With these changes in place, the model size grew to 66M parameters, but the training optimizations kept training speed (measured in tokens / second) roughly flat (137k tokens / second). The best validation achieved is 3.37, perplexity e^(3.37) = 29. Not bad for $5 of GPU time!
+With these changes in place, the model size grew to 66M parameters, but the training optimizations kept training speed roughly flat (137k tokens / second). GPU utilization increased from 76% to 82%. The best validation loss achieved is 3.37, perplexity e^(3.37) = 29. Trained in 15 hours on an RTX 6000.
 
-Let's rerun our perplexity eval:
+<img src="assets/gpu_utilization.png" alt="GPU Utilization" width="600"/>
+
+Let's rerun our perplexity eval across corpora:
 
 | Model | open books | WikiText-103 | Simple Wikipedia | FineWeb-EDU | C4 |
 |-------|------------|--------------|------------------|-------------|-----|
 | GPT2-63M (latest) | 202.13 | 81.29 | 33.00 | 31.65 | 55.59 |
-| GPT2-63M (best) | 213.97 | 88.29 | 32.71 | 33.40 | 52.26 |
+| GPT2-63M (best loss) | 213.97 | 88.29 | 32.71 | 33.40 | 52.26 |
 | GPT2-33M | 39.83 | 305,383 | 504,193 | 196,370 | 174,530 |
 
 As we can see, the newly trained model generalizes far better out-of-domain data (such as C4). 
@@ -286,7 +289,7 @@ Response: John lives in the capital of England. London is the capital of England
 - John is also a member of the House of York. He is not a member of Parliament anymore.
 ```
 
-# TODO: Compute numeric scores for ICL such as next token perplexity early / late in the sequence
+TODO: Compute numeric scores for ICL such as next token perplexity early / late in the sequence
 
 Future Improvements:
 **SigmaReparam**: track attention entropy (concentration) as described in the Apple paper on gradient explosions. [10]
