@@ -3,9 +3,7 @@
 ## Introduction
 As language models are increasingly used in applications that go far beyond simple next-token prediction, understanding them from first principles is incredibly useful. While modern pre-trained models are highly adaptable, high-level APIs often obscure the core mechanics and insights into their behavior, limitations, and optimization. This project is a complete implementation and framework built from the ground up to provide the understanding to adapt these models to novel tasks.
 
-I built the framework's key components from scratch—including the GPT-2 model architecture, the training loops, and the evaluation pipeline—and developed modular components to analyze model behavior under different hyperparameters. I built this using the open-source stack (PyTorch, Weights & Biases, Hugging Face) to implement these ideas on the toolset used by most of the AI community, contrasting with my experience in Google's TensorFlow and JAX ecosystem.
-
-To show what we can learn by diving deep into the stack, I pre-train a custom GPT-2 model, visualize its attention weights to interpret its behavior, and show how it can be aligned for a specific task.
+I built the framework's key components from scratch—including the GPT-2 model architecture, the training loops, and the evaluation pipeline—and developed modular components to analyze model behavior under different hyperparameters. I built this using the open-source stack (PyTorch, Weights & Biases, Hugging Face) to implement these ideas on the toolset used by most of the AI community, contrasting with my experience in Google's TensorFlow and JAX ecosystem. To show what we can learn by diving deep into the stack, I pre-train a custom GPT-2 model, visualize its attention weights to interpret its behavior, and show how it can be aligned for a specific task.
 
 update 1: During model evaluation, I discovered an interesting challenge: the original Toronto Open Book Corpus has been lost and is now only available in lowercase with punctuation removed. I decided to fine-tune a model to [restore capitalization and punctuation](corpus-restoration.md).
 
